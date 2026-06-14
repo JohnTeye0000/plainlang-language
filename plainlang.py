@@ -36,14 +36,19 @@ except (AttributeError, ValueError):
     pass
 
 
-# ─── Errors ─────────────────────────────────────────────────────────────────
-# One error type, always carrying a line number and (when we can) a gentle hint.
+# ─── Errors & diagnostics ────────────────────────────────────────────────────
+# One error type, carrying a line and (when we can) a source span so the
+# message can underline the exact offending text with a caret, plus a hint
+# that may include a "did you mean?" suggestion.
 
 class PlainLangError(Exception):
-    def __init__(self, message, line=None, hint=None):
+    def __init__(self, message, line=None, hint=None, col=None, length=None, near=None):
         self.message = message
         self.line = line
         self.hint = hint
+        self.col = col          # 1-based column of the offending token
+        self.length = length    # width of the caret underline
+        self.near = near        # an identifier to locate in the line, when col is unknown
         super().__init__(message)
 
     def show(self):
@@ -52,6 +57,78 @@ class PlainLangError(Exception):
         if self.hint:
             out.append(f"  Hint: {self.hint}")
         return "\n".join(out)
+
+
+def _levenshtein(a, b):
+    if a == b:
+        return 0
+    if not a or not b:
+        return len(a) + len(b)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def suggest(name, candidates):
+    """Closest candidate to `name`, if one is near enough. Deterministic."""
+    best, best_d = None, 999
+    low = name.lower()
+    for c in sorted(set(candidates)):     # sorted -> stable tie-breaking
+        d = _levenshtein(low, c.lower())
+        if d < best_d:
+            best, best_d = c, d
+    if best is not None and best_d <= min(3, max(1, len(name) // 2 + 1)):
+        return best
+    return None
+
+
+def _did_you_mean(name, candidates):
+    s = suggest(name, candidates)
+    return f"Did you mean '{s}'?" if s else None
+
+
+def unknown_variable_error(name, candidates, line):
+    """Built in one place so both back ends produce identical messages."""
+    visible = [c for c in candidates if not c.startswith("$")]
+    hint = _did_you_mean(name, visible) or f"Create it first with:  set {name} to ..."
+    return PlainLangError(f"I haven't heard of a variable called '{name}' yet.",
+                          line, hint, near=name)
+
+
+def unknown_function_error(name, candidates, line):
+    hint = _did_you_mean(name, list(candidates)) or f"Teach me one with:  define {name} ... end"
+    return PlainLangError(f"I don't know a function called '{name}'.",
+                          line, hint, near=name)
+
+
+def format_error(source, err):
+    """Render an error with a source-line excerpt and a caret underline."""
+    if not isinstance(err, PlainLangError):
+        return f"\n  Error: {err}"
+    if not err.line:
+        return err.show()
+    lines = source.split("\n")
+    if not (1 <= err.line <= len(lines)):
+        return err.show()
+    src = lines[err.line - 1]
+    col, length = err.col, err.length
+    if col is None and err.near:                 # locate the name to underline it
+        idx = src.find(err.near)
+        if idx >= 0:
+            col, length = idx + 1, len(err.near)
+    num = str(err.line)
+    out = [f"\n  Oops! Something went wrong on line {err.line}:",
+           f"    {err.message}", "",
+           f"    {num} | {src}"]
+    if col:
+        out.append(f"    {' ' * (len(num) + 3 + col - 1)}{'^' * max(1, length or 1)}")
+    if err.hint:
+        out.append(f"  Hint: {err.hint}")
+    return "\n".join(out)
 
 
 # ─── Tokenizer ──────────────────────────────────────────────────────────────
@@ -85,31 +162,35 @@ KEYWORDS = {
 
 
 def tokenize(source):
+    # Each token is (kind, value, line, col, length). col is 1-based; length is
+    # the width of the source text, so errors can underline it with a caret.
     tokens = []
     line = 1
+    line_start = 0
     for m in MASTER.finditer(source):
         kind, val = m.lastgroup, m.group()
+        col = m.start() - line_start + 1
+        length = m.end() - m.start()
         if kind == "NEWLINE":
             line += 1
+            line_start = m.end()
         elif kind == "SKIP":
             continue
         elif kind == "NUMBER":
-            tokens.append(("NUMBER", float(val) if "." in val else int(val), line))
+            tokens.append(("NUMBER", float(val) if "." in val else int(val), line, col, length))
         elif kind == "STRING":
-            tokens.append(("STRING", val[1:-1], line))
+            tokens.append(("STRING", val[1:-1], line, col, length))
         elif kind == "WORD":
             low = val.lower()
-            if low in KEYWORDS:
-                tokens.append(("KW", low, line))
-            else:
-                tokens.append(("IDENT", val, line))
+            tokens.append((("KW", low) if low in KEYWORDS else ("IDENT", val)) + (line, col, length))
         elif kind in ("LPAREN", "RPAREN", "COMMA"):
-            tokens.append((kind, val, line))
+            tokens.append((kind, val, line, col, length))
         elif kind == "UNKNOWN":
             raise PlainLangError(
                 f"I don't understand the symbol '{val}'.", line,
-                "PlainLang uses words like 'plus' and 'is greater than' instead of symbols.")
-    tokens.append(("EOF", None, line))
+                "PlainLang uses words like 'plus' and 'is greater than' instead of symbols.",
+                col=col, length=length)
+    tokens.append(("EOF", None, line, len(source) - line_start + 1, 1))
     return tokens
 
 
@@ -145,19 +226,26 @@ class Parser:
     def line(self):
         return self.tokens[self.pos][2]
 
+    @staticmethod
+    def _span(t):
+        return (t[3] if len(t) > 3 else None, t[4] if len(t) > 4 else None)
+
     def eat_kw(self, word):
         t = self.peek()
         if t[0] != "KW" or t[1] != word:
-            got = self._describe(t)
+            col, length = self._span(t)
             raise PlainLangError(
-                f"I expected the word '{word}' here, but found {got}.", t[2])
+                f"I expected the word '{word}' here, but found {self._describe(t)}.",
+                t[2], col=col, length=length)
         return self.advance()
 
     def eat(self, kind, label):
         t = self.peek()
         if t[0] != kind:
+            col, length = self._span(t)
             raise PlainLangError(
-                f"I expected {label} here, but found {self._describe(t)}.", t[2])
+                f"I expected {label} here, but found {self._describe(t)}.",
+                t[2], col=col, length=length)
         return self.advance()
 
     @staticmethod
@@ -207,10 +295,16 @@ class Parser:
         if self.kind() == "IDENT":
             return self.call_stmt()  # bare function call, e.g. greet with "Bob"
         t = self.peek()
+        col, length = self._span(t)
+        hint = "Statements begin with words like set, say, if, repeat, for, or define."
+        if t[0] == "IDENT":
+            s = suggest(t[1], ["set", "say", "ask", "if", "repeat", "while",
+                               "count", "for", "define", "call", "return", "add", "remove"])
+            if s:
+                hint = f"Did you mean '{s}'?"
         raise PlainLangError(
             f"I don't know how to start a statement with {self._describe(t)}.",
-            t[2],
-            "Statements begin with words like set, say, if, repeat, for, or define.")
+            t[2], hint, col=col, length=length)
 
     def set_stmt(self):
         self.eat_kw("set")
@@ -301,10 +395,31 @@ class Parser:
         self.eat_kw("end")
         return ("define", name, params, body)
 
+    # tokens that can begin a value (so we can tell a real call from a typo)
+    _VALUE_START_KW = {"true", "false", "empty", "list", "item", "length",
+                       "uppercase", "lowercase", "round", "absolute", "square",
+                       "random", "minus"}
+    _STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
+                     "for", "define", "call", "return", "add", "remove"]
+
     def call_stmt(self):
         if self.is_kw("call"):
             self.advance()
-        name = self.eat("IDENT", "a function name")[1]
+        name_tok = self.eat("IDENT", "a function name")
+        name = name_tok[1]
+        # A bare name followed by a value (not 'with') that looks like a
+        # mistyped keyword is almost certainly a typo:  saay "hi"  ->  say
+        if not self.is_kw("with"):
+            nxt = self.peek()
+            looks_like_value = nxt[0] in ("STRING", "NUMBER", "IDENT", "LPAREN") or \
+                               (nxt[0] == "KW" and nxt[1] in self._VALUE_START_KW)
+            if looks_like_value:
+                s = suggest(name, self._STATEMENT_KW)
+                if s:
+                    col, length = self._span(name_tok)
+                    raise PlainLangError(
+                        f"I don't know how to start a statement with '{name}'.",
+                        name_tok[2], f"Did you mean '{s}'?", col=col, length=length)
         args = self._maybe_args()
         return ("call", name, args)
 
@@ -486,9 +601,11 @@ class Parser:
                 return ("call", t[1], args)
             return ("var", t[1])
 
+        col, length = self._span(t)
         raise PlainLangError(
             f"I expected a value here, but found {self._describe(t)}.", t[2],
-            "A value is a number, some \"text\", a variable, or a list.")
+            "A value is a number, some \"text\", a variable, or a list.",
+            col=col, length=length)
 
 
 # ─── Interpreter ────────────────────────────────────────────────────────────
@@ -509,9 +626,13 @@ class Environment:
             if name in env.vars:
                 return env.vars[name]
             env = env.parent
-        raise PlainLangError(
-            f"I haven't heard of a variable called '{name}' yet.", line,
-            f"Create it first with:  set {name} to ...")
+        # gather every visible name so we can offer a "did you mean?"
+        names = set()
+        env = self
+        while env:
+            names.update(env.vars.keys())
+            env = env.parent
+        raise unknown_variable_error(name, names, line)
 
     def assign(self, name, value):
         env = self
@@ -637,9 +758,7 @@ class Interpreter:
 
     def call_function(self, name, arg_exprs, env):
         if name not in self.functions:
-            raise PlainLangError(
-                f"I don't know a function called '{name}'.", self.current_line,
-                f"Teach me one with:  define {name} ... end")
+            raise unknown_function_error(name, self.functions.keys(), self.current_line)
         params, body = self.functions[name]
         if len(params) != len(arg_exprs):
             raise PlainLangError(
@@ -883,7 +1002,7 @@ def run_source(source, on_output=print, on_input=input):
         Interpreter(on_output, on_input).run(tree)
         return True, None
     except PlainLangError as e:
-        msg = e.show()
+        msg = format_error(source, e)
         on_output(msg)
         return False, msg
     except RecursionError:
@@ -936,7 +1055,7 @@ def repl():
                 tree = Parser(tokens).parse()
                 interp.run(tree)
             except PlainLangError as e:
-                print(e.show())
+                print(format_error(source, e))
             except ReturnSignal:
                 pass
 

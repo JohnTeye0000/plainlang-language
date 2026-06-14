@@ -404,8 +404,7 @@ class VM:
                 if v is MISS:
                     v = glb.get(arg, MISS)
                     if v is MISS:
-                        raise PlainLangError(f"I haven't heard of a variable called '{arg}' yet.",
-                                             line, f"Create it first with:  set {arg} to ...")
+                        raise pl.unknown_variable_error(arg, list(floc) + list(glb), line)
                 push(v)
             elif op == "CONST":
                 push(consts[arg])
@@ -437,8 +436,7 @@ class VM:
                 name, argc = arg
                 fn = functions.get(name)
                 if fn is None:
-                    raise PlainLangError(f"I don't know a function called '{name}'.",
-                                         line, f"Teach me one with:  define {name} ... end")
+                    raise pl.unknown_function_error(name, functions.keys(), line)
                 if len(fn.params) != argc:
                     raise PlainLangError(f"'{name}' expects {len(fn.params)} value(s), but got {argc}.", line)
                 if argc:
@@ -633,7 +631,7 @@ def run_source(source, on_output=print, on_input=input, rng=None):
         VM(program, on_output, on_input, rng).run()
         return True, None
     except PlainLangError as e:
-        msg = e.show()
+        msg = pl.format_error(source, e)
         on_output(msg)
         return False, msg
 
