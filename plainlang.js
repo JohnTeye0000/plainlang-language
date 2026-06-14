@@ -19,13 +19,16 @@
 (function (global) {
   "use strict";
 
-  // ─── Errors ──────────────────────────────────────────────────────────────
+  // ─── Errors & diagnostics ──────────────────────────────────────────────────
   class PlainLangError extends Error {
-    constructor(message, line, hint) {
+    constructor(message, line, hint, col, length, near) {
       super(message);
       this.plMessage = message;
       this.line = line || null;
       this.hint = hint || null;
+      this.col = col != null ? col : null;       // 1-based column of the token
+      this.length = length != null ? length : null;
+      this.near = near || null;                  // identifier to locate when col is unknown
     }
     show() {
       const where = this.line ? `line ${this.line}` : "your program";
@@ -33,6 +36,62 @@
       if (this.hint) out += `\n  Hint: ${this.hint}`;
       return out;
     }
+  }
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    if (!a || !b) return a.length + b.length;
+    let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i];
+      for (let j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] !== b[j - 1] ? 1 : 0));
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+
+  function suggest(name, candidates) {
+    let best = null, bestD = 999;
+    const low = name.toLowerCase();
+    for (const c of [...new Set(candidates)].sort()) {   // sorted -> stable ties
+      const d = levenshtein(low, c.toLowerCase());
+      if (d < bestD) { best = c; bestD = d; }
+    }
+    if (best !== null && bestD <= Math.min(3, Math.max(1, Math.floor(name.length / 2) + 1))) return best;
+    return null;
+  }
+  function didYouMean(name, candidates) {
+    const s = suggest(name, candidates);
+    return s ? `Did you mean '${s}'?` : null;
+  }
+  function unknownVariableError(name, candidates, line) {
+    const visible = [...candidates].filter((c) => !c.startsWith("$"));
+    const hint = didYouMean(name, visible) || `Create it first with:  set ${name} to ...`;
+    return new PlainLangError(`I haven't heard of a variable called '${name}' yet.`, line, hint, null, null, name);
+  }
+  function unknownFunctionError(name, candidates, line) {
+    const hint = didYouMean(name, [...candidates]) || `Teach me one with:  define ${name} ... end`;
+    return new PlainLangError(`I don't know a function called '${name}'.`, line, hint, null, null, name);
+  }
+
+  function formatError(source, err) {
+    if (!(err instanceof PlainLangError)) return "Error: " + (err && err.message);
+    if (!err.line) return err.show();
+    const lines = source.split("\n");
+    if (err.line < 1 || err.line > lines.length) return err.show();
+    const src = lines[err.line - 1];
+    let col = err.col, length = err.length;
+    if (col == null && err.near) {
+      const idx = src.indexOf(err.near);
+      if (idx >= 0) { col = idx + 1; length = err.near.length; }
+    }
+    const num = String(err.line);
+    let out = `Oops! Something went wrong on line ${err.line}:\n    ${err.plMessage}\n\n    ${num} | ${src}`;
+    if (col) out += `\n    ${" ".repeat(num.length + 3 + col - 1)}${"^".repeat(Math.max(1, length || 1))}`;
+    if (err.hint) out += `\n  Hint: ${err.hint}`;
+    return out;
   }
 
   // ─── Tokenizer ───────────────────────────────────────────────────────────
@@ -53,8 +112,11 @@
   ]);
 
   function tokenize(source) {
+    // Each token is [kind, value, line, col, length]; col is 1-based so errors
+    // can underline the exact source text with a caret.
     const tokens = [];
     let line = 1;
+    let lineStart = 0;
     let i = 0;
     const n = source.length;
     const isAlpha = (c) => /[A-Za-z_]/.test(c);
@@ -63,17 +125,18 @@
 
     while (i < n) {
       const c = source[i];
-      if (c === "\n") { line++; i++; continue; }
+      if (c === "\n") { line++; i++; lineStart = i; continue; }
       if (c === " " || c === "\t" || c === "\r") { i++; continue; }
       if (c === "#") { while (i < n && source[i] !== "\n") i++; continue; }
-      if (c === "(") { tokens.push(["LPAREN", "(", line]); i++; continue; }
-      if (c === ")") { tokens.push(["RPAREN", ")", line]); i++; continue; }
-      if (c === ",") { tokens.push(["COMMA", ",", line]); i++; continue; }
+      const col = i - lineStart + 1;
+      if (c === "(") { tokens.push(["LPAREN", "(", line, col, 1]); i++; continue; }
+      if (c === ")") { tokens.push(["RPAREN", ")", line, col, 1]); i++; continue; }
+      if (c === ",") { tokens.push(["COMMA", ",", line, col, 1]); i++; continue; }
       if (c === '"') {
         let j = i + 1, s = "";
         while (j < n && source[j] !== '"') { s += source[j]; j++; }
-        if (j >= n) throw new PlainLangError("This text is missing its closing quote (\").", line);
-        tokens.push(["STRING", s, line]);
+        if (j >= n) throw new PlainLangError("This text is missing its closing quote (\").", line, null, col, 1);
+        tokens.push(["STRING", s, line, col, j + 1 - i]);
         i = j + 1;
         continue;
       }
@@ -84,7 +147,7 @@
           s += "."; j++;
           while (j < n && isDigit(source[j])) { s += source[j]; j++; }
         }
-        tokens.push(["NUMBER", parseFloat(s), line]);
+        tokens.push(["NUMBER", parseFloat(s), line, col, j - i]);
         i = j;
         continue;
       }
@@ -92,20 +155,24 @@
         let j = i, s = "";
         while (j < n && isAlnum(source[j])) { s += source[j]; j++; }
         const low = s.toLowerCase();
-        tokens.push(KEYWORDS.has(low) ? ["KW", low, line] : ["IDENT", s, line]);
+        tokens.push(KEYWORDS.has(low) ? ["KW", low, line, col, j - i] : ["IDENT", s, line, col, j - i]);
         i = j;
         continue;
       }
       throw new PlainLangError(
         `I don't understand the symbol '${c}'.`, line,
-        "PlainLang uses words like 'plus' and 'is greater than' instead of symbols.");
+        "PlainLang uses words like 'plus' and 'is greater than' instead of symbols.", col, 1);
     }
-    tokens.push(["EOF", null, line]);
+    tokens.push(["EOF", null, line, i - lineStart + 1, 1]);
     return tokens;
   }
 
   // ─── Parser ──────────────────────────────────────────────────────────────
   const BLOCK_ENDERS = new Set(["end", "otherwise"]);
+  const STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
+    "for", "define", "call", "return", "add", "remove", "move", "turn", "pen"];
+  const VALUE_START_KW = new Set(["true", "false", "empty", "list", "item", "length",
+    "uppercase", "lowercase", "round", "absolute", "square", "random", "minus"]);
 
   class Parser {
     constructor(tokens) { this.t = tokens; this.p = 0; }
@@ -121,16 +188,21 @@
       if (x[0] === "NUMBER") return `the number ${x[1]}`;
       return `'${x[1]}'`;
     }
+    span(x) { return [x[3] != null ? x[3] : null, x[4] != null ? x[4] : null]; }
     eatKw(word) {
       const x = this.peek();
-      if (x[0] !== "KW" || x[1] !== word)
-        throw new PlainLangError(`I expected the word '${word}' here, but found ${this.describe(x)}.`, x[2]);
+      if (x[0] !== "KW" || x[1] !== word) {
+        const [col, len] = this.span(x);
+        throw new PlainLangError(`I expected the word '${word}' here, but found ${this.describe(x)}.`, x[2], null, col, len);
+      }
       return this.advance();
     }
     eat(kind, label) {
       const x = this.peek();
-      if (x[0] !== kind)
-        throw new PlainLangError(`I expected ${label} here, but found ${this.describe(x)}.`, x[2]);
+      if (x[0] !== kind) {
+        const [col, len] = this.span(x);
+        throw new PlainLangError(`I expected ${label} here, but found ${this.describe(x)}.`, x[2], null, col, len);
+      }
       return this.advance();
     }
 
@@ -170,9 +242,14 @@
       if (this.isKw("wait")) return this.waitStmt();
       if (this.kind() === "IDENT") return this.callStmt();
       const x = this.peek();
+      const [col, len] = this.span(x);
+      let hint = "Statements begin with words like set, say, if, repeat, for, define, or move.";
+      if (x[0] === "IDENT") {
+        const s = suggest(x[1], STATEMENT_KW);
+        if (s) hint = `Did you mean '${s}'?`;
+      }
       throw new PlainLangError(
-        `I don't know how to start a statement with ${this.describe(x)}.`, x[2],
-        "Statements begin with words like set, say, if, repeat, for, define, or move.");
+        `I don't know how to start a statement with ${this.describe(x)}.`, x[2], hint, col, len);
     }
 
     setStmt() { this.eatKw("set"); const name = this.eat("IDENT", "a variable name")[1]; this.eatKw("to"); return ["set", name, this.expression()]; }
@@ -227,7 +304,23 @@
     }
     callStmt() {
       if (this.isKw("call")) this.advance();
-      const name = this.eat("IDENT", "a function name")[1];
+      const nameTok = this.eat("IDENT", "a function name");
+      const name = nameTok[1];
+      // A bare name followed by a value (not 'with') that looks like a mistyped
+      // keyword is almost certainly a typo:  saay "hi"  ->  say
+      if (!this.isKw("with")) {
+        const nxt = this.peek();
+        const looksLikeValue = ["STRING", "NUMBER", "IDENT", "LPAREN"].includes(nxt[0]) ||
+          (nxt[0] === "KW" && VALUE_START_KW.has(nxt[1]));
+        if (looksLikeValue) {
+          const s = suggest(name, STATEMENT_KW);
+          if (s) {
+            const [col, len] = this.span(nameTok);
+            throw new PlainLangError(`I don't know how to start a statement with '${name}'.`,
+              nameTok[2], `Did you mean '${s}'?`, col, len);
+          }
+        }
+      }
       return ["call", name, this.maybeArgs()];
     }
     maybeArgs() {
@@ -334,9 +427,10 @@
         }
         return ["var", x[1]];
       }
+      const [col, len] = this.span(x);
       throw new PlainLangError(
         `I expected a value here, but found ${this.describe(x)}.`, x[2],
-        'A value is a number, some "text", a variable, or a list.');
+        'A value is a number, some "text", a variable, or a list.', col, len);
     }
   }
 
@@ -348,7 +442,9 @@
     get(name, line) {
       let e = this;
       while (e) { if (name in e.vars) return e.vars[name]; e = e.parent; }
-      throw new PlainLangError(`I haven't heard of a variable called '${name}' yet.`, line, `Create it first with:  set ${name} to ...`);
+      const names = [];
+      for (e = this; e; e = e.parent) for (const k in e.vars) names.push(k);
+      throw unknownVariableError(name, names, line);
     }
     assign(name, value) {
       let e = this;
@@ -482,7 +578,7 @@
 
     callFunction(name, argExprs, env) {
       const fn = this.functions[name];
-      if (!fn) throw new PlainLangError(`I don't know a function called '${name}'.`, this.currentLine, `Teach me one with:  define ${name} ... end`);
+      if (!fn) throw unknownFunctionError(name, Object.keys(this.functions), this.currentLine);
       if (fn.params.length !== argExprs.length)
         throw new PlainLangError(`'${name}' expects ${fn.params.length} value(s), but got ${argExprs.length}.`, this.currentLine);
       const local = new Environment(this.globals);
@@ -758,7 +854,7 @@
       return { ok: true, error: null, output: interp.output, trace: interp.trace, turtle: interp.segments };
     } catch (e) {
       if (e instanceof PlainLangError) {
-        return { ok: false, error: e.show(), errorLine: e.line, output: interp.output, trace: interp.trace, turtle: interp.segments };
+        return { ok: false, error: formatError(source, e), errorLine: e.line, output: interp.output, trace: interp.trace, turtle: interp.segments };
       }
       if (e && e[RETURN]) {
         return { ok: true, error: null, output: interp.output, trace: interp.trace, turtle: interp.segments };
@@ -767,7 +863,8 @@
     }
   }
 
-  const PlainLang = { run, compile, tokenize, Parser, Interpreter, toStr, PlainLangError };
+  const PlainLang = { run, compile, tokenize, Parser, Interpreter, toStr, PlainLangError,
+                      suggest, formatError };
   if (typeof module !== "undefined" && module.exports) module.exports = PlainLang;
   global.PlainLang = PlainLang;
 })(typeof window !== "undefined" ? window : globalThis);
