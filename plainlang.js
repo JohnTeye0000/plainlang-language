@@ -1,0 +1,773 @@
+/*
+ * PlainLang — JavaScript engine
+ * ------------------------------------------------------------------
+ * A faithful port of the Python interpreter, extended with:
+ *   - turtle graphics (visual output on a canvas)
+ *   - execution tracing (for the time-travel debugger)
+ *
+ * Public API:
+ *   PlainLang.run(source, options) -> {
+ *       ok, error, output (string[]),
+ *       trace (Frame[]), turtle (Segment[])
+ *   }
+ *
+ * A Frame is a snapshot taken just before each statement runs:
+ *   { line, vars: {name: displayValue}, outputLen, turtleLen, turtle:{x,y,angle,penDown,color} }
+ *
+ * Works in the browser and in Node (module.exports at the bottom).
+ */
+(function (global) {
+  "use strict";
+
+  // ─── Errors ──────────────────────────────────────────────────────────────
+  class PlainLangError extends Error {
+    constructor(message, line, hint) {
+      super(message);
+      this.plMessage = message;
+      this.line = line || null;
+      this.hint = hint || null;
+    }
+    show() {
+      const where = this.line ? `line ${this.line}` : "your program";
+      let out = `Oops! Something went wrong on ${where}:\n    ${this.plMessage}`;
+      if (this.hint) out += `\n  Hint: ${this.hint}`;
+      return out;
+    }
+  }
+
+  // ─── Tokenizer ───────────────────────────────────────────────────────────
+  const KEYWORDS = new Set([
+    "set", "to", "say", "ask", "into",
+    "if", "then", "otherwise", "end",
+    "repeat", "times", "while", "count", "from", "for", "each", "in",
+    "define", "with", "call", "return",
+    "list", "of", "empty", "add", "remove", "item",
+    "plus", "minus", "multiplied", "divided", "by",
+    "is", "not", "greater", "less", "than", "equal", "at", "least", "most",
+    "and", "or", "true", "false",
+    "length", "uppercase", "lowercase", "round", "absolute",
+    "square", "root", "random", "between",
+    // turtle vocabulary
+    "move", "forward", "backward", "back", "turn", "left", "right",
+    "pen", "up", "down", "color", "wait",
+  ]);
+
+  function tokenize(source) {
+    const tokens = [];
+    let line = 1;
+    let i = 0;
+    const n = source.length;
+    const isAlpha = (c) => /[A-Za-z_]/.test(c);
+    const isAlnum = (c) => /[A-Za-z0-9_]/.test(c);
+    const isDigit = (c) => c >= "0" && c <= "9";
+
+    while (i < n) {
+      const c = source[i];
+      if (c === "\n") { line++; i++; continue; }
+      if (c === " " || c === "\t" || c === "\r") { i++; continue; }
+      if (c === "#") { while (i < n && source[i] !== "\n") i++; continue; }
+      if (c === "(") { tokens.push(["LPAREN", "(", line]); i++; continue; }
+      if (c === ")") { tokens.push(["RPAREN", ")", line]); i++; continue; }
+      if (c === ",") { tokens.push(["COMMA", ",", line]); i++; continue; }
+      if (c === '"') {
+        let j = i + 1, s = "";
+        while (j < n && source[j] !== '"') { s += source[j]; j++; }
+        if (j >= n) throw new PlainLangError("This text is missing its closing quote (\").", line);
+        tokens.push(["STRING", s, line]);
+        i = j + 1;
+        continue;
+      }
+      if (isDigit(c)) {
+        let j = i, s = "";
+        while (j < n && isDigit(source[j])) { s += source[j]; j++; }
+        if (source[j] === "." && isDigit(source[j + 1])) {
+          s += "."; j++;
+          while (j < n && isDigit(source[j])) { s += source[j]; j++; }
+        }
+        tokens.push(["NUMBER", parseFloat(s), line]);
+        i = j;
+        continue;
+      }
+      if (isAlpha(c)) {
+        let j = i, s = "";
+        while (j < n && isAlnum(source[j])) { s += source[j]; j++; }
+        const low = s.toLowerCase();
+        tokens.push(KEYWORDS.has(low) ? ["KW", low, line] : ["IDENT", s, line]);
+        i = j;
+        continue;
+      }
+      throw new PlainLangError(
+        `I don't understand the symbol '${c}'.`, line,
+        "PlainLang uses words like 'plus' and 'is greater than' instead of symbols.");
+    }
+    tokens.push(["EOF", null, line]);
+    return tokens;
+  }
+
+  // ─── Parser ──────────────────────────────────────────────────────────────
+  const BLOCK_ENDERS = new Set(["end", "otherwise"]);
+
+  class Parser {
+    constructor(tokens) { this.t = tokens; this.p = 0; }
+    peek() { return this.t[this.p]; }
+    kind() { return this.t[this.p][0]; }
+    line() { return this.t[this.p][2]; }
+    isKw(...words) { const x = this.t[this.p]; return x[0] === "KW" && words.includes(x[1]); }
+    advance() { return this.t[this.p++]; }
+
+    describe(x) {
+      if (x[0] === "EOF") return "the end of the program";
+      if (x[0] === "STRING") return `the text "${x[1]}"`;
+      if (x[0] === "NUMBER") return `the number ${x[1]}`;
+      return `'${x[1]}'`;
+    }
+    eatKw(word) {
+      const x = this.peek();
+      if (x[0] !== "KW" || x[1] !== word)
+        throw new PlainLangError(`I expected the word '${word}' here, but found ${this.describe(x)}.`, x[2]);
+      return this.advance();
+    }
+    eat(kind, label) {
+      const x = this.peek();
+      if (x[0] !== kind)
+        throw new PlainLangError(`I expected ${label} here, but found ${this.describe(x)}.`, x[2]);
+      return this.advance();
+    }
+
+    parse() {
+      const stmts = [];
+      while (this.kind() !== "EOF") stmts.push(this.statement());
+      return ["block", stmts];
+    }
+    block() {
+      const stmts = [];
+      while (this.kind() !== "EOF" && !(this.peek()[0] === "KW" && BLOCK_ENDERS.has(this.peek()[1])))
+        stmts.push(this.statement());
+      return ["block", stmts];
+    }
+
+    statement() {
+      const ln = this.line();
+      return ["@", ln, this.inner()];
+    }
+    inner() {
+      if (this.isKw("set")) return this.setStmt();
+      if (this.isKw("say")) return this.sayStmt();
+      if (this.isKw("ask")) return this.askStmt();
+      if (this.isKw("if")) return this.ifStmt();
+      if (this.isKw("repeat")) return this.repeatStmt();
+      if (this.isKw("while")) return this.whileStmt();
+      if (this.isKw("count")) return this.countStmt();
+      if (this.isKw("for")) return this.foreachStmt();
+      if (this.isKw("define")) return this.defineStmt();
+      if (this.isKw("call")) return this.callStmt();
+      if (this.isKw("return")) return this.returnStmt();
+      if (this.isKw("add")) return this.addStmt();
+      if (this.isKw("remove")) return this.removeStmt();
+      if (this.isKw("move")) return this.moveStmt();
+      if (this.isKw("turn")) return this.turnStmt();
+      if (this.isKw("pen")) return this.penStmt();
+      if (this.isKw("wait")) return this.waitStmt();
+      if (this.kind() === "IDENT") return this.callStmt();
+      const x = this.peek();
+      throw new PlainLangError(
+        `I don't know how to start a statement with ${this.describe(x)}.`, x[2],
+        "Statements begin with words like set, say, if, repeat, for, define, or move.");
+    }
+
+    setStmt() { this.eatKw("set"); const name = this.eat("IDENT", "a variable name")[1]; this.eatKw("to"); return ["set", name, this.expression()]; }
+    sayStmt() { this.eatKw("say"); return ["say", this.expression()]; }
+    askStmt() { this.eatKw("ask"); const p = this.expression(); this.eatKw("into"); const name = this.eat("IDENT", "a variable name")[1]; return ["ask", p, name]; }
+
+    ifStmt() {
+      this.eatKw("if");
+      const branches = [];
+      let cond = this.expression(); this.eatKw("then");
+      branches.push([cond, this.block()]);
+      let elseBlock = null;
+      while (this.isKw("otherwise")) {
+        this.advance();
+        if (this.isKw("if")) {
+          this.advance();
+          cond = this.expression(); this.eatKw("then");
+          branches.push([cond, this.block()]);
+        } else { elseBlock = this.block(); break; }
+      }
+      this.eatKw("end");
+      return ["if", branches, elseBlock];
+    }
+    repeatStmt() { this.eatKw("repeat"); const c = this.expression(); this.eatKw("times"); const b = this.block(); this.eatKw("end"); return ["repeat", c, b]; }
+    whileStmt() { this.eatKw("while"); const c = this.expression(); const b = this.block(); this.eatKw("end"); return ["while", c, b]; }
+    countStmt() {
+      this.eatKw("count");
+      const v = this.eat("IDENT", "a counter variable name")[1];
+      this.eatKw("from"); const s = this.expression();
+      this.eatKw("to"); const e = this.expression();
+      const b = this.block(); this.eatKw("end");
+      return ["count", v, s, e, b];
+    }
+    foreachStmt() {
+      this.eatKw("for"); this.eatKw("each");
+      const v = this.eat("IDENT", "a loop variable name")[1];
+      this.eatKw("in"); const seq = this.expression();
+      const b = this.block(); this.eatKw("end");
+      return ["foreach", v, seq, b];
+    }
+    defineStmt() {
+      this.eatKw("define");
+      const name = this.eat("IDENT", "a function name")[1];
+      const params = [];
+      if (this.isKw("with")) {
+        this.advance();
+        params.push(this.eat("IDENT", "a parameter name")[1]);
+        while (this.isKw("and")) { this.advance(); params.push(this.eat("IDENT", "a parameter name")[1]); }
+      }
+      const b = this.block(); this.eatKw("end");
+      return ["define", name, params, b];
+    }
+    callStmt() {
+      if (this.isKw("call")) this.advance();
+      const name = this.eat("IDENT", "a function name")[1];
+      return ["call", name, this.maybeArgs()];
+    }
+    maybeArgs() {
+      // Arguments are separated by 'and' (also the boolean operator), so each
+      // argument parses below 'and'/'or'. Use parens for a boolean argument.
+      const args = [];
+      if (this.isKw("with")) {
+        this.advance();
+        args.push(this.comparison());
+        while (this.isKw("and")) { this.advance(); args.push(this.comparison()); }
+      }
+      return args;
+    }
+    returnStmt() { this.eatKw("return"); return ["return", this.expression()]; }
+    addStmt() { this.eatKw("add"); const v = this.expression(); this.eatKw("to"); const name = this.eat("IDENT", "a list variable name")[1]; return ["add", v, name]; }
+    removeStmt() { this.eatKw("remove"); this.eatKw("item"); const idx = this.expression(); this.eatKw("from"); const name = this.eat("IDENT", "a list variable name")[1]; return ["remove", idx, name]; }
+
+    // turtle
+    moveStmt() {
+      this.eatKw("move");
+      let dir = "forward";
+      if (this.isKw("forward")) { this.advance(); dir = "forward"; }
+      else if (this.isKw("backward", "back")) { this.advance(); dir = "back"; }
+      return ["move", dir, this.expression()];
+    }
+    turnStmt() {
+      this.eatKw("turn");
+      let dir = "right";
+      if (this.isKw("right")) { this.advance(); dir = "right"; }
+      else if (this.isKw("left")) { this.advance(); dir = "left"; }
+      return ["turn", dir, this.expression()];
+    }
+    penStmt() {
+      this.eatKw("pen");
+      if (this.isKw("up")) { this.advance(); return ["pen", "up"]; }
+      if (this.isKw("down")) { this.advance(); return ["pen", "down"]; }
+      if (this.isKw("color")) { this.advance(); this.eatKw("to"); return ["pencolor", this.expression()]; }
+      const x = this.peek();
+      throw new PlainLangError("After 'pen' I expected 'up', 'down', or 'color to ...'.", x[2]);
+    }
+    waitStmt() { this.eatKw("wait"); return ["wait", this.expression()]; }
+
+    // expressions
+    expression() { return this.orExpr(); }
+    orExpr() { let l = this.andExpr(); while (this.isKw("or")) { this.advance(); l = ["or", l, this.andExpr()]; } return l; }
+    andExpr() { let l = this.notExpr(); while (this.isKw("and")) { this.advance(); l = ["and", l, this.notExpr()]; } return l; }
+    notExpr() { if (this.isKw("not")) { this.advance(); return ["not", this.notExpr()]; } return this.comparison(); }
+    comparison() {
+      const l = this.arith();
+      if (this.isKw("is")) { this.advance(); const op = this.compOp(); return ["cmp", op, l, this.arith()]; }
+      return l;
+    }
+    compOp() {
+      if (this.isKw("not")) { this.advance(); if (this.isKw("equal")) { this.advance(); if (this.isKw("to")) this.advance(); } return "!="; }
+      if (this.isKw("greater")) { this.advance(); this.eatKw("than"); return ">"; }
+      if (this.isKw("less")) { this.advance(); this.eatKw("than"); return "<"; }
+      if (this.isKw("at")) {
+        this.advance();
+        if (this.isKw("least")) { this.advance(); return ">="; }
+        if (this.isKw("most")) { this.advance(); return "<="; }
+        throw new PlainLangError("After 'is at' I expected 'least' or 'most'.", this.line());
+      }
+      if (this.isKw("equal")) { this.advance(); if (this.isKw("to")) this.advance(); return "=="; }
+      return "==";
+    }
+    arith() {
+      let l = this.term();
+      while (this.isKw("plus", "minus")) { const op = this.advance()[1] === "plus" ? "+" : "-"; l = ["binop", op, l, this.term()]; }
+      return l;
+    }
+    term() {
+      let l = this.factor();
+      while (this.isKw("multiplied", "divided")) { const w = this.advance()[1]; this.eatKw("by"); l = ["binop", w === "multiplied" ? "*" : "/", l, this.factor()]; }
+      return l;
+    }
+    factor() { if (this.isKw("minus")) { this.advance(); return ["neg", this.factor()]; } return this.primary(); }
+    primary() {
+      const x = this.peek();
+      if (x[0] === "NUMBER") { this.advance(); return ["num", x[1]]; }
+      if (x[0] === "STRING") { this.advance(); return ["str", x[1]]; }
+      if (x[0] === "LPAREN") { this.advance(); const e = this.expression(); this.eat("RPAREN", "a closing ')'"); return e; }
+      if (this.isKw("true")) { this.advance(); return ["bool", true]; }
+      if (this.isKw("false")) { this.advance(); return ["bool", false]; }
+      if (this.isKw("empty")) { this.advance(); this.eatKw("list"); return ["list", []]; }
+      if (this.isKw("list")) {
+        this.advance(); this.eatKw("of");
+        const items = [this.expression()];
+        while (this.kind() === "COMMA") { this.advance(); items.push(this.expression()); }
+        return ["list", items];
+      }
+      if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
+      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute")) {
+        const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
+      }
+      if (this.isKw("square")) { this.advance(); this.eatKw("root"); this.eatKw("of"); return ["builtin", "sqrt", [this.primary()]]; }
+      if (this.isKw("random")) { this.advance(); this.eatKw("between"); const lo = this.arith(); this.eatKw("and"); const hi = this.arith(); return ["builtin", "random", [lo, hi]]; }
+      if (x[0] === "IDENT") {
+        this.advance();
+        if (this.isKw("with")) {
+          this.advance();
+          const args = [this.comparison()];
+          while (this.isKw("and")) { this.advance(); args.push(this.comparison()); }
+          return ["call", x[1], args];
+        }
+        return ["var", x[1]];
+      }
+      throw new PlainLangError(
+        `I expected a value here, but found ${this.describe(x)}.`, x[2],
+        'A value is a number, some "text", a variable, or a list.');
+    }
+  }
+
+  // ─── Interpreter ─────────────────────────────────────────────────────────
+  const RETURN = Symbol("return");
+
+  class Environment {
+    constructor(parent) { this.vars = Object.create(null); this.parent = parent || null; }
+    get(name, line) {
+      let e = this;
+      while (e) { if (name in e.vars) return e.vars[name]; e = e.parent; }
+      throw new PlainLangError(`I haven't heard of a variable called '${name}' yet.`, line, `Create it first with:  set ${name} to ...`);
+    }
+    assign(name, value) {
+      let e = this;
+      while (e) { if (name in e.vars) { e.vars[name] = value; return; } e = e.parent; }
+      this.vars[name] = value;
+    }
+    flatten() {
+      // child overrides parent; returns {name: value}
+      const out = {};
+      const chain = [];
+      let e = this; while (e) { chain.push(e); e = e.parent; }
+      for (let k = chain.length - 1; k >= 0; k--) Object.assign(out, chain[k].vars);
+      return out;
+    }
+  }
+
+  class Interpreter {
+    constructor(options) {
+      options = options || {};
+      this.globals = new Environment();
+      this.functions = Object.create(null);
+      this.currentLine = null;
+      this.output = [];
+      this.trace = [];
+      this.maxSteps = options.maxSteps || 200000;
+      this.steps = 0;
+      this.inputs = options.inputs || [];     // queued answers for `ask`
+      this.inputIndex = 0;
+      this.rng = options.rng || Math.random;
+      // turtle state
+      this.turtle = { x: 0, y: 0, angle: 0, penDown: true, color: "#38bdf8" };
+      this.segments = [];                      // {x1,y1,x2,y2,color}
+    }
+
+    snapshot(line) {
+      if (this.trace.length < 60000) {
+        const vars = this.globals.flatten();
+        const display = {};
+        for (const k in vars) display[k] = toStr(vars[k]);
+        this.trace.push({
+          line,
+          vars: display,
+          outputLen: this.output.length,
+          turtleLen: this.segments.length,
+          turtle: { x: this.turtle.x, y: this.turtle.y, angle: this.turtle.angle, penDown: this.turtle.penDown, color: this.turtle.color },
+        });
+      }
+    }
+
+    tick() {
+      if (++this.steps > this.maxSteps)
+        throw new PlainLangError("Your program ran for too long and was stopped.", this.currentLine, "Check for a loop that never ends.");
+    }
+
+    run(tree) { this.execBlock(tree, this.globals); }
+    execBlock(node, env) { for (const s of node[1]) this.execStmt(s, env); }
+
+    execStmt(node, env) {
+      if (node[0] === "@") { this.currentLine = node[1]; this.snapshot(node[1]); node = node[2]; }
+      this.tick();
+      const op = node[0];
+
+      if (op === "set") { env.assign(node[1], this.eval(node[2], env)); return; }
+      if (op === "say") { this.output.push(toStr(this.eval(node[1], env))); return; }
+      if (op === "ask") {
+        const ans = this.inputIndex < this.inputs.length ? this.inputs[this.inputIndex++] : "";
+        env.assign(node[2], coerceInput(ans)); return;
+      }
+      if (op === "if") {
+        for (const [cond, body] of node[1]) if (truthy(this.eval(cond, env))) { this.execBlock(body, env); return; }
+        if (node[2]) this.execBlock(node[2], env);
+        return;
+      }
+      if (op === "repeat") {
+        const c = this.eval(node[1], env);
+        if (typeof c !== "number") throw new PlainLangError("'repeat' needs a number of times to repeat.", this.currentLine);
+        for (let k = 0; k < Math.floor(c); k++) this.execBlock(node[2], env);
+        return;
+      }
+      if (op === "while") {
+        while (truthy(this.eval(node[1], env))) { this.tick(); this.execBlock(node[2], env); }
+        return;
+      }
+      if (op === "count") {
+        const start = Math.floor(this.eval(node[2], env));
+        const stop = Math.floor(this.eval(node[3], env));
+        const step = stop >= start ? 1 : -1;
+        for (let i = start; step > 0 ? i <= stop : i >= stop; i += step) { this.tick(); env.assign(node[1], i); this.execBlock(node[4], env); }
+        return;
+      }
+      if (op === "foreach") {
+        const seq = this.eval(node[2], env);
+        if (!Array.isArray(seq)) throw new PlainLangError("'for each' needs a list to walk through.", this.currentLine, "Make one with:  set things to list of 1, 2, 3");
+        for (const item of seq) { this.tick(); env.assign(node[1], item); this.execBlock(node[3], env); }
+        return;
+      }
+      if (op === "define") { this.functions[node[1]] = { params: node[2], body: node[3] }; return; }
+      if (op === "call") { this.callFunction(node[1], node[2], env); return; }
+      if (op === "return") { const v = this.eval(node[1], env); const e = new Error("return"); e[RETURN] = true; e.value = v; throw e; }
+      if (op === "add") {
+        const v = this.eval(node[1], env); const t = env.get(node[2], this.currentLine);
+        if (!Array.isArray(t)) throw new PlainLangError(`I can only add to a list, but '${node[2]}' is not a list.`, this.currentLine);
+        t.push(v); return;
+      }
+      if (op === "remove") {
+        const idx = Math.floor(this.eval(node[1], env)); const t = env.get(node[2], this.currentLine);
+        if (!Array.isArray(t)) throw new PlainLangError(`I can only remove from a list, but '${node[2]}' is not a list.`, this.currentLine);
+        if (idx < 1 || idx > t.length) throw new PlainLangError(`There is no item ${idx} in '${node[2]}' (it has ${t.length} item(s)).`, this.currentLine);
+        t.splice(idx - 1, 1); return;
+      }
+      // turtle
+      if (op === "move") {
+        const dist = this.eval(node[2], env);
+        if (typeof dist !== "number") throw new PlainLangError("'move' needs a number of steps.", this.currentLine);
+        const sign = node[1] === "forward" ? 1 : -1;
+        const rad = (this.turtle.angle - 90) * Math.PI / 180; // 0 = up
+        const nx = this.turtle.x + Math.cos(rad) * dist * sign;
+        const ny = this.turtle.y + Math.sin(rad) * dist * sign;
+        if (this.turtle.penDown) this.segments.push({ x1: this.turtle.x, y1: this.turtle.y, x2: nx, y2: ny, color: this.turtle.color });
+        this.turtle.x = nx; this.turtle.y = ny; return;
+      }
+      if (op === "turn") {
+        const deg = this.eval(node[2], env);
+        if (typeof deg !== "number") throw new PlainLangError("'turn' needs a number of degrees.", this.currentLine);
+        this.turtle.angle += node[1] === "right" ? deg : -deg; return;
+      }
+      if (op === "pen") { this.turtle.penDown = node[1] === "down"; return; }
+      if (op === "pencolor") { this.turtle.color = String(this.eval(node[1], env)); return; }
+      if (op === "wait") { return; /* no-op in trace model; UI controls timing */ }
+    }
+
+    callFunction(name, argExprs, env) {
+      const fn = this.functions[name];
+      if (!fn) throw new PlainLangError(`I don't know a function called '${name}'.`, this.currentLine, `Teach me one with:  define ${name} ... end`);
+      if (fn.params.length !== argExprs.length)
+        throw new PlainLangError(`'${name}' expects ${fn.params.length} value(s), but got ${argExprs.length}.`, this.currentLine);
+      const local = new Environment(this.globals);
+      for (let k = 0; k < fn.params.length; k++) local.vars[fn.params[k]] = this.eval(argExprs[k], env);
+      try { this.execBlock(fn.body, local); }
+      catch (e) { if (e[RETURN]) return e.value; throw e; }
+      return null;
+    }
+
+    eval(node, env) {
+      const op = node[0];
+      if (op === "num") return node[1];
+      if (op === "str") return node[1];
+      if (op === "bool") return node[1];
+      if (op === "var") return env.get(node[1], this.currentLine);
+      if (op === "neg") return -this.eval(node[1], env);
+      if (op === "list") return node[1].map((e) => this.eval(e, env));
+      if (op === "index") {
+        const seq = this.eval(node[1], env); const i = Math.floor(this.eval(node[2], env));
+        if (!Array.isArray(seq)) throw new PlainLangError("'item ... of ...' needs a list.", this.currentLine);
+        if (i < 1 || i > seq.length) throw new PlainLangError(`There is no item ${i} (the list has ${seq.length} item(s)).`, this.currentLine, "Lists start counting at item 1.");
+        return seq[i - 1];
+      }
+      if (op === "binop") return this.binop(node[1], this.eval(node[2], env), this.eval(node[3], env));
+      if (op === "cmp") return this.compare(node[1], this.eval(node[2], env), this.eval(node[3], env));
+      if (op === "and") return truthy(this.eval(node[1], env)) && truthy(this.eval(node[2], env));
+      if (op === "or") return truthy(this.eval(node[1], env)) || truthy(this.eval(node[2], env));
+      if (op === "not") return !truthy(this.eval(node[1], env));
+      if (op === "builtin") return this.builtin(node[1], node[2].map((a) => this.eval(a, env)));
+      if (op === "call") {
+        const r = this.callFunction(node[1], node[2], env);
+        if (r === null) throw new PlainLangError(`The function '${node[1]}' was used as a value, but it didn't 'return' anything.`, this.currentLine);
+        return r;
+      }
+      throw new PlainLangError("I couldn't make sense of part of your program.", this.currentLine);
+    }
+
+    binop(op, a, b) {
+      if (op === "+") {
+        if (typeof a === "string" || typeof b === "string") return toStr(a) + toStr(b);
+        if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+        this.needNumbers("plus", a, b); return a + b;
+      }
+      if (op === "-") { this.needNumbers("minus", a, b); return a - b; }
+      if (op === "*") { this.needNumbers("multiplied by", a, b); return a * b; }
+      if (op === "/") {
+        this.needNumbers("divided by", a, b);
+        if (b === 0) throw new PlainLangError("You can't divide by zero.", this.currentLine, "Check the number you're dividing by.");
+        return a / b;
+      }
+    }
+    needNumbers(name, a, b) {
+      for (const v of [a, b]) if (typeof v !== "number")
+        throw new PlainLangError(`'${name}' only works with numbers, but I got ${typeName(v)}.`, this.currentLine);
+    }
+    compare(op, a, b) {
+      switch (op) {
+        case "==": return a === b;
+        case "!=": return a !== b;
+        case ">": return a > b;
+        case "<": return a < b;
+        case ">=": return a >= b;
+        case "<=": return a <= b;
+      }
+    }
+    builtin(name, args) {
+      if (name === "length") {
+        const v = args[0];
+        if (Array.isArray(v) || typeof v === "string") return v.length;
+        throw new PlainLangError("'length of' works on text or a list.", this.currentLine);
+      }
+      if (name === "uppercase") return toStr(args[0]).toUpperCase();
+      if (name === "lowercase") return toStr(args[0]).toLowerCase();
+      if (name === "round") return Math.round(args[0]);
+      if (name === "absolute") return Math.abs(args[0]);
+      if (name === "sqrt") {
+        if (args[0] < 0) throw new PlainLangError("I can't take the square root of a negative number.", this.currentLine);
+        return Math.sqrt(args[0]);
+      }
+      if (name === "random") {
+        const lo = Math.floor(args[0]), hi = Math.floor(args[1]);
+        const a = Math.min(lo, hi), b = Math.max(lo, hi);
+        return a + Math.floor(this.rng() * (b - a + 1));
+      }
+    }
+  }
+
+  // ─── Shared helpers ──────────────────────────────────────────────────────
+  function truthy(v) {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string" || Array.isArray(v)) return v.length > 0;
+    return v != null;
+  }
+  function coerceInput(raw) {
+    if (typeof raw !== "string") return raw;
+    if (raw.trim() !== "" && !isNaN(Number(raw))) return Number(raw);
+    return raw;
+  }
+  function toStr(v) {
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);
+    if (Array.isArray(v)) return "[" + v.map(toStr).join(", ") + "]";
+    if (v == null) return "nothing";
+    return String(v);
+  }
+  function typeName(v) {
+    if (typeof v === "boolean") return "true/false";
+    if (typeof v === "number") return "a number";
+    if (typeof v === "string") return "some text";
+    if (Array.isArray(v)) return "a list";
+    return "nothing";
+  }
+
+  // ─── Compiler: PlainLang → JavaScript ──────────────────────────────────────
+  // Walks the same AST the interpreter uses and emits readable, idiomatic
+  // JavaScript. The point is pedagogical: a beginner sees their English program
+  // become the real code a professional would write.
+  class Compiler {
+    constructor() { this.lines = []; this.indent = 0; }
+    pad() { return "  ".repeat(this.indent); }
+    emit(s) { this.lines.push(this.pad() + s); }
+    unwrap(n) { return n[0] === "@" ? n[2] : n; }
+
+    compile(tree) {
+      // declare top-level variables, then the statements
+      this.declareScope(tree);
+      this.stmtList(tree);
+      const body = this.lines.join("\n");
+      return this.prelude(body) + body + "\n";
+    }
+
+    prelude(body) {
+      const parts = [
+        "// Generated from PlainLang — the real JavaScript your program becomes.",
+        "const say = (x) => console.log(format(x));",
+        "function format(v) {",
+        '  if (typeof v === "boolean") return v ? "true" : "false";',
+        '  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);',
+        '  if (Array.isArray(v)) return "[" + v.map(format).join(", ") + "]";',
+        "  return String(v);",
+        "}",
+      ];
+      if (/\brandomBetween\(/.test(body)) parts.push(
+        "function randomBetween(a, b) {",
+        "  a = Math.floor(a); b = Math.floor(b);",
+        "  const lo = Math.min(a, b), hi = Math.max(a, b);",
+        "  return lo + Math.floor(Math.random() * (hi - lo + 1));",
+        "}");
+      if (/\bask\(/.test(body)) parts.push("const ask = (q) => prompt(q);");
+      if (/\bturtle\./.test(body)) parts.push(
+        "// 'turtle' would be your drawing library (move the pen across a canvas).");
+      return parts.join("\n") + "\n\n";
+    }
+
+    declareScope(block) {
+      const names = new Set();
+      const walk = (stmts) => {
+        for (let s of stmts) {
+          s = this.unwrap(s);
+          const op = s[0];
+          if (op === "set" || op === "ask") names.add(s[1]);
+          else if (op === "if") { for (const [, b] of s[1]) walk(b[1]); if (s[2]) walk(s[2][1]); }
+          else if (op === "repeat") walk(s[2][1]);
+          else if (op === "while") walk(s[2][1]);
+          else if (op === "count") walk(s[4][1]);
+          else if (op === "foreach") walk(s[3][1]);
+          // 'define' bodies get their own scope — don't descend
+        }
+      };
+      walk(block[1]);
+      if (names.size) this.emit("let " + [...names].join(", ") + ";");
+    }
+
+    stmtList(block) { for (const s of block[1]) this.stmt(s); }
+
+    openBlock(header, body) {
+      this.emit(header + " {");
+      this.indent++; this.stmtList(body); this.indent--;
+      this.emit("}");
+    }
+
+    stmt(node) {
+      node = this.unwrap(node);
+      const op = node[0];
+      switch (op) {
+        case "set":  this.emit(`${node[1]} = ${this.expr(node[2])};`); break;
+        case "say":  this.emit(`say(${this.expr(node[1])});`); break;
+        case "ask":  this.emit(`${node[2]} = ask(${this.expr(node[1])});`); break;
+        case "return": this.emit(`return ${this.expr(node[1])};`); break;
+        case "repeat": this.openBlock(`for (let i = 0; i < ${this.expr(node[1])}; i++)`, node[2]); break;
+        case "while":  this.openBlock(`while (${this.expr(node[1])})`, node[2]); break;
+        case "count":  this.openBlock(
+          `for (let ${node[1]} = ${this.expr(node[2])}; ${node[1]} <= ${this.expr(node[3])}; ${node[1]}++)`, node[4]); break;
+        case "foreach": this.openBlock(`for (const ${node[1]} of ${this.expr(node[2])})`, node[3]); break;
+        case "define": {
+          this.emit(`function ${node[1]}(${node[2].join(", ")}) {`);
+          this.indent++; this.declareScope(node[3]); this.stmtList(node[3]); this.indent--;
+          this.emit("}");
+          break;
+        }
+        case "call": this.emit(`${node[1]}(${node[2].map((a) => this.expr(a)).join(", ")});`); break;
+        case "add":  this.emit(`${node[2]}.push(${this.expr(node[1])});`); break;
+        case "remove": this.emit(`${node[2]}.splice(${this.expr(node[1])} - 1, 1);`); break;
+        case "move": this.emit(`turtle.${node[1] === "forward" ? "forward" : "back"}(${this.expr(node[2])});`); break;
+        case "turn": this.emit(`turtle.${node[1]}(${this.expr(node[2])});`); break;
+        case "pen":  this.emit(`turtle.${node[1] === "down" ? "penDown" : "penUp"}();`); break;
+        case "pencolor": this.emit(`turtle.color(${this.expr(node[1])});`); break;
+        case "wait": this.emit(`// wait`); break;
+        case "if": {
+          const [branches, elseBlock] = [node[1], node[2]];
+          branches.forEach(([cond, body], idx) => {
+            const kw = idx === 0 ? "if" : "} else if";
+            if (idx === 0) this.emit(`if (${this.expr(cond)}) {`);
+            else this.emit(`} else if (${this.expr(cond)}) {`);
+            this.indent++; this.stmtList(body); this.indent--;
+          });
+          if (elseBlock) { this.emit("} else {"); this.indent++; this.stmtList(elseBlock); this.indent--; }
+          this.emit("}");
+          break;
+        }
+      }
+    }
+
+    expr(node) {
+      const op = node[0];
+      if (op === "num") return String(node[1]);
+      if (op === "str") return JSON.stringify(node[1]);
+      if (op === "bool") return String(node[1]);
+      if (op === "var") return node[1];
+      if (op === "neg") return `(-${this.expr(node[1])})`;
+      if (op === "list") return "[" + node[1].map((e) => this.expr(e)).join(", ") + "]";
+      if (op === "index") return `${this.expr(node[1])}[${this.expr(node[2])} - 1]`;
+      if (op === "binop") return `(${this.expr(node[2])} ${node[1]} ${this.expr(node[3])})`;
+      if (op === "cmp") {
+        const js = { "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<=" }[node[1]];
+        return `(${this.expr(node[2])} ${js} ${this.expr(node[3])})`;
+      }
+      if (op === "and") return `(${this.expr(node[1])} && ${this.expr(node[2])})`;
+      if (op === "or")  return `(${this.expr(node[1])} || ${this.expr(node[2])})`;
+      if (op === "not") return `(!${this.expr(node[1])})`;
+      if (op === "call") return `${node[1]}(${node[2].map((a) => this.expr(a)).join(", ")})`;
+      if (op === "builtin") {
+        const a = node[2].map((x) => this.expr(x));
+        switch (node[1]) {
+          case "length":    return `${a[0]}.length`;
+          case "uppercase": return `String(${a[0]}).toUpperCase()`;
+          case "lowercase": return `String(${a[0]}).toLowerCase()`;
+          case "round":     return `Math.round(${a[0]})`;
+          case "absolute":  return `Math.abs(${a[0]})`;
+          case "sqrt":      return `Math.sqrt(${a[0]})`;
+          case "random":    return `randomBetween(${a[0]}, ${a[1]})`;
+        }
+      }
+      return "/* ? */";
+    }
+  }
+
+  function compile(source) {
+    const tokens = tokenize(source);
+    const tree = new Parser(tokens).parse();
+    return new Compiler().compile(tree);
+  }
+
+  // ─── Public entry point ──────────────────────────────────────────────────
+  function run(source, options) {
+    const interp = new Interpreter(options);
+    try {
+      const tokens = tokenize(source);
+      const tree = new Parser(tokens).parse();
+      interp.run(tree);
+      interp.snapshot(null); // final frame: end-state variables, full output & drawing
+      return { ok: true, error: null, output: interp.output, trace: interp.trace, turtle: interp.segments };
+    } catch (e) {
+      if (e instanceof PlainLangError) {
+        return { ok: false, error: e.show(), errorLine: e.line, output: interp.output, trace: interp.trace, turtle: interp.segments };
+      }
+      if (e && e[RETURN]) {
+        return { ok: true, error: null, output: interp.output, trace: interp.trace, turtle: interp.segments };
+      }
+      return { ok: false, error: "Unexpected problem: " + (e && e.message), output: interp.output, trace: interp.trace, turtle: interp.segments };
+    }
+  }
+
+  const PlainLang = { run, compile, tokenize, Parser, Interpreter, toStr, PlainLangError };
+  if (typeof module !== "undefined" && module.exports) module.exports = PlainLang;
+  global.PlainLang = PlainLang;
+})(typeof window !== "undefined" ? window : globalThis);
