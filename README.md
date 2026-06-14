@@ -29,9 +29,11 @@ run one step at a time.
 | **`plainlang.js`** | The language engine in JavaScript: tokenizer → parser → interpreter, **plus a compiler that translates PlainLang to readable JavaScript**. |
 | **`plainlang.py`** | A second, independent implementation: a tree-walking command-line interpreter and REPL. |
 | **`plainvm.py`** | A **third** backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
+| **`plaincheck.py`** | A static analyzer — a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code). |
 | **`test_plainlang.py`** | A 48-case test suite covering the language and its error messages. |
 | **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
+| **`test_check.py`** | An 18-case suite for the static analyzer (and its precision — clean code must not be flagged). |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
 ---
@@ -197,6 +199,30 @@ loop test `(i - stop) * step <= 0`:
 
 The VM's dispatch loop inlines the hottest opcodes (variable access, arithmetic, calls)
 and runs roughly **1.9× faster** than the tree-walker on recursive workloads.
+
+### Catching bugs before you run
+
+`plaincheck.py` is a separate **semantic-analysis phase**. It walks the tree, tracks a
+chain of scopes, and reports problems *before* execution — and, unlike the runtime, it
+reports them *all at once*, each with a caret:
+
+```
+$ python plaincheck.py program.plang
+
+  error  ·  line 8
+    'double' expects 1 value(s), but you gave 2.
+
+    8 | say double with 3 and 4
+            ^^^^^^
+
+  warning  ·  line 11
+    This line can never run — it comes after a 'return'.
+  ...
+  6 problem(s):  3 error(s), 3 warning(s).
+```
+
+It is tuned for **precision** — correct programs are never flagged — because a teaching
+tool that cries wolf is worse than none.
 
 ---
 
