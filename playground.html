@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PlainLang — a language you can read aloud</title>
+<style>
+  /* ════════════════════════════════════════════════════════════════════
+     PlainLang — "The Manuscript"
+     Identity: code as literature. A writer's desk, ruled paper, an
+     editor's red pen. The teaching errors ARE the red-pen corrections.
+     ════════════════════════════════════════════════════════════════════ */
+  :root {
+    --paper:   #f4eee1;   /* warm cream page                       */
+    --paper-2: #ece2cf;   /* deeper page tone, panels             */
+    --paper-3: #e3d7bf;   /* active rows / pressed                */
+    --ink:     #211b14;   /* near-black warm ink                  */
+    --ink-2:   #4a4034;   /* secondary ink                        */
+    --ink-soft:#8c7f6a;   /* faded annotation ink                 */
+    --rule:    #d2c6ad;   /* hairline rules                       */
+    --rule-2:  #c3b596;   /* heavier rules                        */
+    --red:     #c0392b;   /* the red pen                          */
+    --red-ink: #9c2a1f;   /* darker red for text                  */
+    --plate:   #1c1813;   /* dark figure-plate for drawings       */
+    /* restrained "printed listing" syntax palette */
+    --kw:  #211b14;       /* keywords: bold ink                   */
+    --str: #5d6a24;       /* strings: olive                       */
+    --num: #a8551d;       /* numbers: burnt sienna                */
+    --com: #a4977f;       /* comments: faded italic               */
+    --fn:  #2a6a62;       /* names: deep teal                     */
+    --good: #4f7a2e;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+    --sans:  "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:  ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background:
+      radial-gradient(1400px 700px at 78% -15%, #fbf7ed 0%, var(--paper) 60%);
+    color: var(--ink);
+    font-family: var(--sans);
+    display: flex; flex-direction: column;
+    height: 100vh; overflow: hidden;
+  }
+  /* faint paper grain */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .5;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0 27px, rgba(33,27,20,.018) 27px 28px);
+  }
+
+  /* ── Masthead (literary journal) ───────────────────────────────────── */
+  .masthead {
+    display: grid; grid-template-columns: 1fr auto; align-items: end;
+    gap: 24px; padding: 18px 32px 12px;
+  }
+  .mast-title h1 {
+    font-family: var(--serif); font-weight: 600; font-size: 38px;
+    letter-spacing: -0.5px; margin: 0; line-height: .95; color: var(--ink);
+  }
+  .mast-title h1 em { font-style: italic; color: var(--red-ink); }
+  .mast-title h1 .stop { color: var(--red); }
+  .mast-title .tagline {
+    margin: 7px 0 0; font-family: var(--serif); font-style: italic;
+    font-size: 15px; color: var(--ink-2);
+  }
+  .mast-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  #examples { max-width: 160px; }
+  .issue {
+    font-family: var(--sans); font-size: 10.5px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--ink-soft); margin-right: 6px;
+    text-align: right; line-height: 1.5;
+  }
+
+  select, button {
+    font-family: var(--sans); font-size: 12.5px; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--rule-2);
+    border-radius: 2px; padding: 9px 13px; cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+  }
+  select:hover, button:hover { border-color: var(--ink-2); }
+  button.run {
+    background: var(--red); color: #fbf2e9; border-color: var(--red);
+    font-weight: 600; letter-spacing: .3px; padding: 9px 18px;
+  }
+  button.run:hover { background: var(--red-ink); border-color: var(--red-ink); }
+  kbd { font-family: var(--mono); font-size: 10.5px; opacity: .8; margin-left: 6px;
+        border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; }
+
+  /* signature double rule under masthead */
+  .double-rule { margin: 0 32px; border: 0; border-top: 3px solid var(--ink);
+                 box-shadow: 0 3px 0 0 var(--ink); height: 0; }
+  .double-rule + .sub { height: 6px; }
+
+  /* ── Main: asymmetric golden split ─────────────────────────────────── */
+  main {
+    flex: 1; min-height: 0; display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(380px, 1fr);
+    margin: 14px 32px 0; gap: 0;
+    border: 1px solid var(--rule-2); border-bottom: none;
+    background: var(--paper);
+  }
+  .col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .col.manuscript { border-right: 1px solid var(--rule-2); }
+
+  .section-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 16px; border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+  }
+  .section-head .no {
+    font-family: var(--serif); font-style: italic; font-size: 13px;
+    color: var(--red-ink);
+  }
+  .section-head .name {
+    font-size: 11px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--ink-2); font-weight: 600;
+  }
+  .section-head .aside {
+    margin-left: auto; font-family: var(--serif); font-style: italic;
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+
+  /* ── §1 The Manuscript (editor) ────────────────────────────────────── */
+  .editor-wrap { position: relative; flex: 1; overflow: hidden; }
+  .editor-scroll { position: absolute; inset: 0; overflow: auto; }
+  .editor-grid { display: grid; grid-template-columns: 52px 1fr; min-height: 100%; }
+  .gutter {
+    font-family: var(--mono); font-size: 13.5px; line-height: 22px;
+    color: var(--ink-soft); text-align: right; padding: 16px 10px 16px 0;
+    user-select: none; background: var(--paper-2);
+    /* the red ruled margin — signature motif */
+    border-right: 2px solid var(--red);
+  }
+  .gutter .lnum.active { color: var(--red); font-weight: 700; }
+  .code-area { position: relative; background:
+    repeating-linear-gradient(0deg, transparent 0 21px, rgba(33,27,20,.025) 21px 22px);
+    background-position: 0 16px; }
+  .code-pre, .code-input {
+    font-family: var(--mono); font-size: 13.5px; line-height: 22px;
+    padding: 16px 18px; margin: 0; border: 0; tab-size: 4;
+    white-space: pre; word-wrap: normal;
+  }
+  .code-pre { position: absolute; inset: 0; pointer-events: none; color: var(--ink); overflow: hidden; }
+  .code-input {
+    position: relative; width: 100%; min-height: 100%;
+    background: transparent; color: transparent; caret-color: var(--red);
+    resize: none; outline: none; overflow: hidden;
+  }
+  /* active/error line = red-pen mark */
+  .line-highlight {
+    position: absolute; left: 0; right: 0; height: 22px;
+    background: rgba(192,57,43,.10);
+    box-shadow: inset 3px 0 0 0 var(--red);
+    pointer-events: none; display: none;
+  }
+  .tok-kw  { color: var(--kw); font-weight: 600; }
+  .tok-str { color: var(--str); }
+  .tok-num { color: var(--num); }
+  .tok-com { color: var(--com); font-style: italic; }
+  .tok-fn  { color: var(--fn); }
+
+  /* ── §2 The Stage (console / drawing) ──────────────────────────────── */
+  .stage { flex: 1.15; display: flex; flex-direction: column; min-height: 0; }
+  .tabs { display: flex; gap: 18px; margin-left: auto; }
+  .tab {
+    font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--ink-soft); cursor: pointer; padding-bottom: 2px;
+    border-bottom: 2px solid transparent; font-weight: 600;
+  }
+  .tab.active { color: var(--red-ink); border-color: var(--red); }
+  .view { flex: 1; min-height: 0; display: none; flex-direction: column; }
+  .view.active { display: flex; }
+
+  .console {
+    flex: 1; overflow: auto; padding: 16px 20px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.75;
+    white-space: pre-wrap; word-break: break-word; color: var(--ink);
+    background: repeating-linear-gradient(0deg, transparent 0 22px, rgba(33,27,20,.03) 22px 23px);
+  }
+  .console .err { color: var(--red-ink); font-weight: 600; }
+  .console .placeholder { color: var(--ink-soft); font-style: italic; font-family: var(--serif); }
+
+  /* drawing as a mounted plate */
+  #canvas-wrap { flex: 1; display: grid; place-content: center; gap: 10px;
+    padding: 18px; background: var(--paper-2); overflow: hidden; text-align: center; }
+  canvas {
+    background: var(--plate); display: block; margin: 0 auto;
+    padding: 0; max-width: 100%; max-height: 100%;
+    border: 1px solid var(--ink); box-shadow: 0 10px 30px rgba(33,27,20,.22), 0 0 0 9px var(--paper);
+    outline: 1px solid var(--rule-2); outline-offset: 8px;
+  }
+  .plate-cap { font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--ink-soft); }
+
+  /* ── §3 In the Margin (variables) ──────────────────────────────────── */
+  .margin { border-top: 1px solid var(--rule-2); display: flex; flex-direction: column;
+            max-height: 34%; min-height: 96px; }
+  .inspector { flex: 1; overflow: auto; padding: 8px 14px 12px; }
+  .inspector .empty { color: var(--ink-soft); font-family: var(--serif); font-style: italic; font-size: 13px; padding: 6px 2px; }
+  .var-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-bottom: 1px dotted var(--rule); }
+  .var-name { font-family: var(--sans); font-size: 11px; letter-spacing: .5px; text-transform: uppercase;
+              font-weight: 700; color: var(--red-ink); min-width: 0; }
+  .var-eq { color: var(--ink-soft); }
+  .var-val { font-family: var(--mono); font-size: 12.5px; color: var(--ink); word-break: break-word; }
+  .var-row.changed { background: rgba(192,57,43,.12); animation: pen .7s ease; }
+  @keyframes pen { from { background: rgba(192,57,43,.32);} to {} }
+
+  /* ── §4 Revisions (time-travel) ────────────────────────────────────── */
+  .timebar { border-top: 1px solid var(--rule-2); background: var(--paper-2);
+             display: flex; align-items: center; gap: 8px; padding: 11px 16px; }
+  .timebar button { padding: 6px 8px; border-radius: 2px; min-width: 32px; flex: 0 0 auto; }
+  .timebar .slider { flex: 1 1 auto; min-width: 40px; accent-color: var(--red); height: 3px; }
+  .timebar .step-label { font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+                         flex: 0 1 auto; min-width: 0; white-space: nowrap; text-align: right; }
+  .timebar.disabled { opacity: .4; pointer-events: none; }
+
+  footer { display: flex; align-items: center; gap: 16px; padding: 9px 32px 12px;
+           color: var(--ink-soft); font-size: 11.5px; }
+  footer .dot { color: var(--red); }
+  footer .status { font-family: var(--mono); }
+  footer .spacer { flex: 1; }
+  footer .metrics { font-family: var(--mono); font-size: 11px; }
+
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: var(--rule-2); border: 3px solid var(--paper); border-radius: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ── The "As JS" view ──────────────────────────────────────────────── */
+  .js-view { flex: 1; min-height: 0; position: relative; }
+  .js-pre { position: absolute; inset: 0; overflow: auto; margin: 0;
+            padding: 16px 18px; font-family: var(--mono); font-size: 12.5px;
+            line-height: 1.65; color: var(--ink); background:
+            repeating-linear-gradient(0deg, transparent 0 20.6px, rgba(33,27,20,.03) 20.6px 21.6px); }
+  .js-copy { position: absolute; top: 10px; right: 16px; z-index: 2;
+             font-size: 10.5px; letter-spacing: .8px; text-transform: uppercase;
+             padding: 5px 10px; background: var(--paper); }
+  .jk { color: #7a1f8c; font-weight: 600; }   /* js keyword  */
+  .js2 { color: var(--str); }                  /* js string   */
+  .jn { color: var(--num); }                   /* js number   */
+  .jc { color: var(--com); font-style: italic; } /* js comment*/
+
+  /* ── The Workbook: lesson bar ──────────────────────────────────────── */
+  .lessonbar { display: none; margin: 12px 32px 0; border: 1px solid var(--rule-2);
+               border-left: 4px solid var(--red); background: var(--paper-2); }
+  .lessonbar.on { display: block; }
+  .lb-top { display: flex; align-items: baseline; gap: 12px; padding: 11px 16px 4px; flex-wrap: wrap; }
+  .lb-kicker { font-family: var(--serif); font-style: italic; font-size: 12.5px; color: var(--red-ink); }
+  .lb-title { font-family: var(--serif); font-size: 17px; font-weight: 600; }
+  .lb-progress { margin-left: auto; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-soft); }
+  .lb-brief { padding: 2px 16px 10px; font-size: 13.5px; color: var(--ink-2); max-width: 80ch; line-height: 1.55; }
+  .lb-brief code { font-family: var(--mono); font-size: 12.5px; background: var(--paper-3); padding: 1px 5px; border-radius: 3px; }
+  .lb-actions { display: flex; align-items: center; gap: 10px; padding: 0 16px 12px; flex-wrap: wrap; }
+  .lb-feedback { font-size: 13px; min-height: 18px; }
+  .lb-feedback.ok { color: var(--good); font-weight: 600; }
+  .lb-feedback.no { color: var(--red-ink); }
+  button.check { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 600; }
+  button.check:hover { background: #000; }
+
+  /* ── The Workbook: modal ───────────────────────────────────────────── */
+  .scrim { display: none; position: fixed; inset: 0; background: rgba(33,27,20,.45);
+           z-index: 50; place-items: center; padding: 24px; }
+  .scrim.on { display: grid; }
+  .workbook { background: var(--paper); border: 1px solid var(--ink); max-width: 560px; width: 100%;
+              max-height: 86vh; overflow: auto; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
+  .wb-head { padding: 20px 24px 12px; border-bottom: 3px solid var(--ink); box-shadow: 0 3px 0 var(--ink); }
+  .wb-head h2 { font-family: var(--serif); font-size: 26px; margin: 0; }
+  .wb-head p { font-family: var(--serif); font-style: italic; color: var(--ink-2); margin: 6px 0 0; font-size: 13.5px; }
+  .wb-list { padding: 10px 0; }
+  .wb-item { display: flex; align-items: center; gap: 14px; padding: 12px 24px; cursor: pointer;
+             border-bottom: 1px dotted var(--rule); }
+  .wb-item:hover { background: var(--paper-2); }
+  .wb-num { font-family: var(--serif); font-style: italic; color: var(--red-ink); width: 26px; font-size: 15px; }
+  .wb-tick { width: 22px; height: 22px; border: 1.5px solid var(--rule-2); border-radius: 50%;
+             display: grid; place-items: center; font-size: 13px; color: transparent; flex: 0 0 auto; }
+  .wb-item.done .wb-tick { background: var(--red); border-color: var(--red); color: var(--paper); }
+  .wb-info { flex: 1; }
+  .wb-info b { font-weight: 600; font-size: 14.5px; }
+  .wb-info span { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+  .wb-close { float: right; }
+
+  /* ── Toast ─────────────────────────────────────────────────────────── */
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+           background: var(--ink); color: var(--paper); padding: 10px 18px; font-size: 13px;
+           border-radius: 2px; opacity: 0; transition: all .25s ease; z-index: 60; pointer-events: none; }
+  .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <div class="masthead">
+    <div class="mast-title">
+      <h1>Plain<em>Lang</em><span class="stop">.</span></h1>
+      <p class="tagline">A programming language written to be read aloud — built to teach a first coder.</p>
+    </div>
+    <div class="mast-meta">
+      <div class="issue">The Playground<br>Vol. I</div>
+      <select id="examples" title="Load an example">
+        <option value="">Specimens…</option>
+      </select>
+      <button id="workbookBtn" title="Guided lessons">Workbook</button>
+      <button id="shareBtn" title="Copy a link to this program">Share</button>
+      <button class="run" id="runBtn">Run<kbd>⌃↵</kbd></button>
+    </div>
+  </div>
+  <hr class="double-rule" /><div class="sub"></div>
+
+  <!-- Workbook lesson bar -->
+  <div class="lessonbar" id="lessonbar">
+    <div class="lb-top">
+      <span class="lb-kicker" id="lbKicker">Workbook · Lesson 1</span>
+      <span class="lb-title" id="lbTitle"></span>
+      <span class="lb-progress" id="lbProgress"></span>
+    </div>
+    <div class="lb-brief" id="lbBrief"></div>
+    <div class="lb-actions">
+      <button class="check" id="checkBtn">Check my answer</button>
+      <button id="lbPrev">‹ Prev</button>
+      <button id="lbNext">Next ›</button>
+      <button id="lbExit">Leave workbook</button>
+      <span class="lb-feedback" id="lbFeedback"></span>
+    </div>
+  </div>
+
+  <main>
+    <!-- §1 Manuscript -->
+    <section class="col manuscript">
+      <div class="section-head">
+        <span class="no">§1</span><span class="name">The Manuscript</span>
+        <span class="aside" id="editorHint">write a program, then Run</span>
+      </div>
+      <div class="editor-wrap">
+        <div class="editor-scroll" id="editorScroll">
+          <div class="editor-grid">
+            <div class="gutter" id="gutter"></div>
+            <div class="code-area">
+              <div class="line-highlight" id="lineHighlight"></div>
+              <pre class="code-pre"><code id="codePre"></code></pre>
+              <textarea class="code-input" id="code" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- right column -->
+    <section class="col">
+      <!-- §2 Stage -->
+      <div class="stage">
+        <div class="section-head">
+          <span class="no">§2</span><span class="name">The Stage</span>
+          <div class="tabs">
+            <div class="tab active" data-view="console">Printed</div>
+            <div class="tab" data-view="drawing">Drawn</div>
+            <div class="tab" data-view="javascript">As JS</div>
+          </div>
+        </div>
+        <div class="view active" data-view="console" id="consoleView">
+          <div class="console" id="console"><span class="placeholder">Whatever the program says will be set in type here.</span></div>
+        </div>
+        <div class="view" data-view="drawing" id="drawingView">
+          <div id="canvas-wrap">
+            <canvas id="canvas" width="440" height="440"></canvas>
+            <div class="plate-cap">Plate I — the turtle's drawing</div>
+          </div>
+        </div>
+        <div class="view" data-view="javascript" id="javascriptView">
+          <div class="js-view">
+            <button class="js-copy" id="jsCopy">Copy</button>
+            <pre class="js-pre" id="jsPre"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- §3 Margin -->
+      <div class="margin">
+        <div class="section-head">
+          <span class="no">§3</span><span class="name">In the Margin</span>
+          <span class="aside">what each name holds</span>
+        </div>
+        <div class="inspector" id="inspector"><div class="empty">Run a program to watch its variables, noted here in the margin.</div></div>
+      </div>
+
+      <!-- §4 Revisions -->
+      <div class="section-head" style="border-top:1px solid var(--rule-2);">
+        <span class="no">§4</span><span class="name">Revisions</span>
+        <span class="aside">step through every change</span>
+      </div>
+      <div class="timebar disabled" id="timebar">
+        <button id="firstBtn" title="Beginning">⏮</button>
+        <button id="prevBtn" title="Back one step">◀</button>
+        <button id="playBtn" title="Play">▶</button>
+        <button id="nextBtn" title="Forward one step">▶▶</button>
+        <input type="range" class="slider" id="slider" min="0" max="0" value="0" />
+        <span class="step-label" id="stepLabel">no run yet</span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span class="status" id="statusPill">ready</span>
+    <span class="dot">✦</span>
+    <span>PlainLang — a teaching language with a time-travel debugger</span>
+    <span class="spacer"></span>
+    <span class="metrics" id="metrics"></span>
+  </footer>
+
+  <!-- Workbook modal -->
+  <div class="scrim" id="scrim">
+    <div class="workbook">
+      <div class="wb-head">
+        <button id="wbClose" class="wb-close">Close</button>
+        <h2>The Workbook</h2>
+        <p>Eight short lessons. Write the program yourself, then ask the book to check it.</p>
+      </div>
+      <div class="wb-list" id="wbList"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script src="plainlang.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const codeEl = $("code"), preEl = $("codePre"), gutterEl = $("gutter");
+  const scrollEl = $("editorScroll"), highlightEl = $("lineHighlight");
+  const consoleEl = $("console"), inspectorEl = $("inspector");
+  const canvas = $("canvas"), ctx = canvas.getContext("2d");
+  const statusPill = $("statusPill"), metricsEl = $("metrics");
+  const timebar = $("timebar"), slider = $("slider"), stepLabel = $("stepLabel");
+
+  const PAD = 16, LINE_H = 22;
+  const KEYWORDS = new Set(("set to say ask into if then otherwise end repeat times while count from for each in " +
+    "define with call return list of empty add remove item plus minus multiplied divided by is not greater less " +
+    "than equal at least most and or true false length uppercase lowercase round absolute square root random between " +
+    "move forward backward back turn left right pen up down color wait").split(" "));
+
+  // ── Syntax highlighting ──────────────────────────────────────────────────
+  function escapeHtml(s) { return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function highlight(src) {
+    let out = "";
+    const re = /(#[^\n]*)|("[^"]*"?)|(\d+(?:\.\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|(\s+)|([^\s])/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      if (m[1]) out += `<span class="tok-com">${escapeHtml(m[1])}</span>`;
+      else if (m[2]) out += `<span class="tok-str">${escapeHtml(m[2])}</span>`;
+      else if (m[3]) out += `<span class="tok-num">${escapeHtml(m[3])}</span>`;
+      else if (m[4]) {
+        const w = m[4];
+        out += KEYWORDS.has(w.toLowerCase())
+          ? `<span class="tok-kw">${escapeHtml(w)}</span>`
+          : `<span class="tok-fn">${escapeHtml(w)}</span>`;
+      } else out += escapeHtml(m[0]);
+    }
+    return out;
+  }
+  let activeLine = 0;
+  function renderGutter(lineCount, active) {
+    let html = "";
+    for (let i = 1; i <= lineCount; i++) html += `<div class="lnum${i === active ? " active" : ""}">${i}</div>`;
+    gutterEl.innerHTML = html;
+  }
+  function sync() {
+    const src = codeEl.value;
+    preEl.innerHTML = highlight(src) + "\n";
+    renderGutter(src.split("\n").length, activeLine);
+    codeEl.style.height = "auto";
+    codeEl.style.height = Math.max(scrollEl.clientHeight, codeEl.scrollHeight) + "px";
+  }
+  function setActiveLine(line) {
+    activeLine = line || 0;
+    const lines = codeEl.value.split("\n").length;
+    if (!line) { highlightEl.style.display = "none"; renderGutter(lines, 0); return; }
+    highlightEl.style.display = "block";
+    highlightEl.style.top = (PAD + (line - 1) * LINE_H) + "px";
+    renderGutter(lines, line);
+    const top = PAD + (line - 1) * LINE_H;
+    if (top < scrollEl.scrollTop + 30 || top > scrollEl.scrollTop + scrollEl.clientHeight - 40)
+      scrollEl.scrollTop = top - scrollEl.clientHeight / 2;
+  }
+
+  codeEl.addEventListener("input", () => {
+    sync();
+    if (document.querySelector('.view[data-view="javascript"]').classList.contains("active")) renderJS();
+  });
+  codeEl.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") { e.preventDefault(); insertText("    "); }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); }
+  });
+  function insertText(t) {
+    const s = codeEl.selectionStart, e = codeEl.selectionEnd;
+    codeEl.value = codeEl.value.slice(0, s) + t + codeEl.value.slice(e);
+    codeEl.selectionStart = codeEl.selectionEnd = s + t.length;
+    sync();
+  }
+
+  // ── Run + state ──────────────────────────────────────────────────────────
+  let result = null, frames = [], cursor = 0, playing = false, playTimer = null, lastVars = {};
+
+  function run() {
+    stopPlay(); setActiveLine(0);
+    result = PlainLang.run(codeEl.value, { maxSteps: 200000 });
+    frames = result.trace || [];
+    metricsEl.textContent =
+      `${frames.length} steps · ${(result.turtle || []).length} strokes · ${(result.output || []).length} lines printed`;
+    statusPill.textContent = result.ok ? "finished" : "error";
+    statusPill.style.color = result.ok ? "var(--good)" : "var(--red-ink)";
+    if (!result.ok && result.errorLine) setActiveLine(result.errorLine);
+
+    if (frames.length > 0) {
+      timebar.classList.remove("disabled");
+      slider.max = frames.length - 1; cursor = frames.length - 1; slider.value = cursor;
+    } else { timebar.classList.add("disabled"); slider.max = 0; cursor = 0; }
+    lastVars = {};
+    renderAt(cursor);
+    showTab((result.turtle || []).length > 0 ? "drawing" : "console");
+  }
+
+  function escapeText(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function renderConsole(uptoLen) {
+    const out = result.output || [];
+    const shown = uptoLen == null ? out : out.slice(0, uptoLen);
+    let html = shown.map(escapeText).join("\n");
+    if (!result.ok && (uptoLen == null || uptoLen >= out.length))
+      html += (html ? "\n\n" : "") + `<span class="err">${escapeText(result.error)}</span>`;
+    consoleEl.innerHTML = html || '<span class="placeholder">(nothing was printed)</span>';
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+  function renderInspector(vars) {
+    const keys = Object.keys(vars);
+    if (!keys.length) { inspectorEl.innerHTML = '<div class="empty">No names defined at this step.</div>'; return; }
+    inspectorEl.innerHTML = keys.map((k) => {
+      const changed = lastVars[k] === undefined || lastVars[k] !== vars[k];
+      return `<div class="var-row${changed ? " changed" : ""}">
+        <span class="var-name">${escapeText(k)}</span><span class="var-eq">→</span>
+        <span class="var-val">${escapeText(vars[k])}</span></div>`;
+    }).join("");
+    lastVars = Object.assign({}, vars);
+  }
+  function drawTurtle(uptoLen, turtleState) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.save(); ctx.translate(W / 2, H / 2);
+    const segs = result.turtle || [];
+    const n = uptoLen == null ? segs.length : uptoLen;
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 2.5;
+    for (let i = 0; i < n; i++) {
+      const s = segs[i];
+      ctx.strokeStyle = s.color || "#e0c068";
+      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+    }
+    if (turtleState) {
+      ctx.translate(turtleState.x, turtleState.y);
+      ctx.rotate((turtleState.angle - 90) * Math.PI / 180 + Math.PI / 2);
+      ctx.fillStyle = "#f4eee1";
+      ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(6, 7); ctx.lineTo(-6, 7); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function renderAt(i) {
+    if (!result) return;
+    if (frames.length === 0) {
+      renderConsole(null); renderInspector({}); drawTurtle(null, null);
+      setActiveLine(result.ok ? 0 : result.errorLine); return;
+    }
+    i = Math.max(0, Math.min(i, frames.length - 1));
+    cursor = i; const f = frames[i]; slider.value = i;
+    const atEnd = i === frames.length - 1;
+    stepLabel.textContent = `${i + 1}/${frames.length}` + (f.line ? ` · ln ${f.line}` : " · done");
+    renderConsole(atEnd ? null : f.outputLen);
+    renderInspector(f.vars || {});
+    drawTurtle(atEnd ? null : f.turtleLen, f.turtle);
+    setActiveLine(atEnd && result.ok ? 0 : (f.line || result.errorLine || 0));
+  }
+
+  // ── Time-travel ────────────────────────────────────────────────────────────
+  slider.addEventListener("input", () => { stopPlay(); lastVars = {}; renderAt(parseInt(slider.value, 10)); });
+  $("firstBtn").onclick = () => { stopPlay(); lastVars = {}; renderAt(0); };
+  $("prevBtn").onclick = () => { stopPlay(); renderAt(cursor - 1); };
+  $("nextBtn").onclick = () => { stopPlay(); renderAt(cursor + 1); };
+  $("playBtn").onclick = () => { playing ? stopPlay() : startPlay(); };
+  function startPlay() {
+    if (!frames.length) return;
+    playing = true; $("playBtn").textContent = "⏸";
+    if (cursor >= frames.length - 1) { lastVars = {}; renderAt(0); }
+    playTimer = setInterval(() => {
+      if (cursor >= frames.length - 1) { stopPlay(); return; }
+      renderAt(cursor + 1);
+    }, 90);
+  }
+  function stopPlay() { playing = false; $("playBtn").textContent = "▶"; if (playTimer) clearInterval(playTimer); playTimer = null; }
+
+  function showTab(name) {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === name));
+    document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === name));
+    if (name === "javascript") renderJS();
+  }
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.view)));
+  $("runBtn").onclick = run;
+
+  // ── "As JS": transpile current program and show it ─────────────────────────
+  const JS_KW = new Set(("const let function return if else for while of break continue true false null new typeof").split(" "));
+  function highlightJS(src) {
+    let out = "";
+    const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][A-Za-z0-9_$]*)|(\s+)|([^\s])/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      if (m[1]) out += `<span class="jc">${escapeText(m[1])}</span>`;
+      else if (m[2]) out += `<span class="js2">${escapeText(m[2])}</span>`;
+      else if (m[3]) out += `<span class="jn">${escapeText(m[3])}</span>`;
+      else if (m[4]) out += JS_KW.has(m[4]) ? `<span class="jk">${m[4]}</span>` : escapeText(m[4]);
+      else out += escapeText(m[0]);
+    }
+    return out;
+  }
+  let lastJS = "";
+  function renderJS() {
+    try { lastJS = PlainLang.compile(codeEl.value); }
+    catch (e) { lastJS = "// This program has an error — fix it, then look again.\n// " + (e.plMessage || e.message); }
+    $("jsPre").innerHTML = highlightJS(lastJS);
+  }
+  $("jsCopy").onclick = () => { copyText(lastJS); toast("JavaScript copied"); };
+
+  // ── Specimens ──────────────────────────────────────────────────────────────
+  const EXAMPLES = {
+    "A first program": `# Welcome. This is PlainLang.
+# Press Run (Ctrl+Enter). Then read §1 aloud — it should just make sense.
+
+set name to "friend"
+say "Hello, " plus name plus "!"
+
+set a to 7
+set b to 6
+say a plus " times " plus b plus " is " plus (a multiplied by b)`,
+
+    "Average score": `set scores to list of 90, 75, 88, 95, 60
+set total to 0
+
+for each s in scores
+    set total to total plus s
+end
+
+say "Scores:   " plus scores
+say "How many: " plus length of scores
+say "Average:  " plus (total divided by length of scores)`,
+
+    "FizzBuzz": `count n from 1 to 20
+    if n divided by 15 is equal to round of (n divided by 15) then
+        say "FizzBuzz"
+    otherwise if n divided by 3 is equal to round of (n divided by 3) then
+        say "Fizz"
+    otherwise if n divided by 5 is equal to round of (n divided by 5) then
+        say "Buzz"
+    otherwise
+        say n
+    end
+end`,
+
+    "Factorial (recursion)": `define factorial with n
+    if n is at most 1 then
+        return 1
+    end
+    return n multiplied by factorial with (n minus 1)
+end
+
+count n from 1 to 8
+    say n plus "! = " plus factorial with n
+end`,
+
+    "Turtle: square": `pen color to "#e0c068"
+repeat 4 times
+    move forward 120
+    turn right 90
+end`,
+
+    "Turtle: spiral": `pen color to "#7ec6c0"
+set step to 2
+count i from 1 to 120
+    move forward step
+    turn right 24
+    set step to step plus 2
+end`,
+
+    "Turtle: star": `pen color to "#d98c5f"
+repeat 5 times
+    move forward 170
+    turn right 144
+end`,
+
+    "Turtle: flower": `set colors to list of "#fb7185", "#fbbf24", "#86efac", "#7dd3fc", "#c4b5fd"
+count round_num from 1 to 36
+    pen color to item ((round_num minus 1) divided by 8 plus 1) of colors
+    repeat 4 times
+        move forward 88
+        turn right 90
+    end
+    turn right 10
+end`,
+
+    "The whole language": `# ── PlainLang, end to end ──
+
+set name to "Ada"
+say "Hi, " plus name
+
+say "(2 + 3) x 4 = " plus ((2 plus 3) multiplied by 4)
+
+set age to 12
+if age is at least 18 then
+    say "adult"
+otherwise if age is at least 13 then
+    say "teenager"
+otherwise
+    say "kid"
+end
+
+set pets to list of "cat", "dog"
+add "parrot" to pets
+say "Pets: " plus pets plus " (" plus length of pets plus ")"
+
+count i from 1 to 3
+    say "count " plus i
+end
+
+define greet with who
+    return "Welcome, " plus who plus "!"
+end
+say greet with name
+
+say uppercase of "shout"
+say "dice roll: " plus random between 1 and 6`,
+  };
+
+  const sel = $("examples");
+  Object.keys(EXAMPLES).forEach((name) => {
+    const o = document.createElement("option");
+    o.value = name; o.textContent = name; sel.appendChild(o);
+  });
+  sel.addEventListener("change", () => {
+    if (EXAMPLES[sel.value]) { codeEl.value = EXAMPLES[sel.value]; sync(); run(); }
+    sel.value = "";
+  });
+
+  // ── Utilities: clipboard + toast ───────────────────────────────────────────
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else fallbackCopy(text);
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("on");
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 1900);
+  }
+
+  // ── Share: encode the program into a link ──────────────────────────────────
+  function encodeProgram(s) { return btoa(unescape(encodeURIComponent(s))); }
+  function decodeProgram(s) { return decodeURIComponent(escape(atob(s))); }
+  $("shareBtn").onclick = () => {
+    const url = location.origin + location.pathname + "#code=" + encodeProgram(codeEl.value);
+    copyText(url); toast("Shareable link copied to clipboard");
+  };
+
+  // ── The Workbook: a guided, auto-checked curriculum ────────────────────────
+  const LESSONS = [
+    { title: "Say something",
+      brief: 'Use <code>say</code> to print a greeting. Make the program print exactly: <code>Hello, world!</code>',
+      starter: '# Lesson 1 — print a line of text.\n# Use:  say "your words here"\n\n',
+      check(r){ if(!r.ok) return "Your program has an error — read §2 and fix it.";
+        return r.output.some(l=>l.trim()==="Hello, world!") ? "" : "Not yet — it should print exactly: Hello, world!"; } },
+    { title: "Remember a value",
+      brief: 'Create a variable called <code>age</code>, set it to a number, then print a sentence like <code>I am 12 years old</code> that uses the variable.',
+      starter: '# Lesson 2 — variables.\n# set age to ...   then   say ... plus age plus ...\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/set\s+age\s+to/i.test(src)) return "Make a variable named age:  set age to ...";
+        return r.output.some(l=>/^I am \d+ years old$/.test(l.trim())) ? "" : "Print a line exactly like: I am 12 years old"; } },
+    { title: "Do some math",
+      brief: 'Print the answer to 23 × 19 — but let PlainLang multiply it with <code>multiplied by</code> (don’t just type 437).',
+      starter: '# Lesson 3 — arithmetic.\n# Use:  multiplied by\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/multiplied by/i.test(src)) return "Use 'multiplied by' to do the calculation.";
+        return r.output.some(l=>l.includes("437")) ? "" : "That doesn't equal 437 yet."; } },
+    { title: "Make a decision",
+      brief: 'A variable <code>score</code> is provided. Print <code>PASS</code> when it is at least 50, otherwise <code>FAIL</code>. Use <code>if … otherwise … end</code>.',
+      starter: 'set score to 72\n\n# Lesson 4 — if / otherwise.\n# Print PASS if score is at least 50, otherwise FAIL.\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/\bif\b/i.test(src) || !/otherwise/i.test(src)) return "Use an if … otherwise … end.";
+        return r.output.some(l=>l.trim()==="PASS") ? "" : "With score 72 it should print PASS. (Try other scores too!)"; } },
+    { title: "Count to five",
+      brief: 'Print the numbers <code>1</code> through <code>5</code>, each on its own line, using a loop.',
+      starter: '# Lesson 5 — loops.\n# Use:  count i from 1 to 5  ...  end\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/(count|repeat|while)/i.test(src)) return "Use a loop (count / repeat), not five separate say lines.";
+        return r.output.map(l=>l.trim()).join(",") === "1,2,3,4,5" ? "" : "It should print 1, 2, 3, 4, 5 — one per line."; } },
+    { title: "Add up a list",
+      brief: 'Make a list of <code>4, 8, 15</code>, then use <code>for each</code> to add them and print the total (<code>27</code>).',
+      starter: '# Lesson 6 — lists.\n# set nums to list of 4, 8, 15\n# for each n in nums ... end\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/list of/i.test(src)) return "Make a list:  set nums to list of 4, 8, 15";
+        if(!/for each/i.test(src)) return "Walk the list:  for each n in nums ... end";
+        return r.output.some(l=>l.includes("27")) ? "" : "The total should be 27."; } },
+    { title: "Write a function",
+      brief: 'Define a function <code>double</code> that returns its input times two, then print <code>double with 50</code> (it should be <code>100</code>).',
+      starter: '# Lesson 7 — functions.\n# define double with n ... return ... end\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/define\s+double\s+with/i.test(src)) return "Start with:  define double with n";
+        if(!/return/i.test(src)) return "A function hands back a value with 'return'.";
+        return r.output.some(l=>l.includes("100")) ? "" : "double with 50 should be 100."; } },
+    { title: "Draw a square",
+      brief: 'Open the <code>Drawn</code> tab. Use <code>move forward</code> and <code>turn right</code> inside a loop to draw a square.',
+      starter: '# Lesson 8 — turtle drawing!\n# repeat 4 times\n#     move forward 120\n#     turn right 90\n# end\n\n',
+      check(r,src){ if(!r.ok) return "There's an error — check §2.";
+        if(!/move/i.test(src)) return "Move the turtle:  move forward 120";
+        return (r.turtle && r.turtle.length >= 4) ? "" : "Draw at least four sides to make a square."; } },
+  ];
+
+  const PROGRESS_KEY = "plainlang.progress.v1";
+  function loadProgress() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch (e) { return {}; } }
+  function saveProgress(p) { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch (e) {} }
+  let progress = loadProgress();
+  let currentLesson = -1;
+
+  function doneCount() { return LESSONS.filter((_, i) => progress[i]).length; }
+  function renderWorkbook() {
+    $("wbList").innerHTML = LESSONS.map((l, i) => `
+      <div class="wb-item${progress[i] ? " done" : ""}" data-i="${i}">
+        <span class="wb-num">${i + 1}</span>
+        <span class="wb-tick">✓</span>
+        <span class="wb-info"><b>${l.title}</b><span>${l.brief.replace(/<[^>]+>/g, "")}</span></span>
+      </div>`).join("");
+    $("wbList").querySelectorAll(".wb-item").forEach((el) =>
+      el.addEventListener("click", () => { closeWorkbook(); startLesson(parseInt(el.dataset.i, 10)); }));
+  }
+  function openWorkbook() { renderWorkbook(); $("scrim").classList.add("on"); }
+  function closeWorkbook() { $("scrim").classList.remove("on"); }
+  $("workbookBtn").onclick = openWorkbook;
+  $("wbClose").onclick = closeWorkbook;
+  $("scrim").addEventListener("click", (e) => { if (e.target === $("scrim")) closeWorkbook(); });
+
+  function startLesson(i) {
+    currentLesson = i;
+    const l = LESSONS[i];
+    $("lessonbar").classList.add("on");
+    $("lbKicker").textContent = `Workbook · Lesson ${i + 1} of ${LESSONS.length}`;
+    $("lbTitle").textContent = l.title;
+    $("lbBrief").innerHTML = l.brief;
+    $("lbProgress").textContent = `${doneCount()} of ${LESSONS.length} complete`;
+    setFeedback("", "");
+    codeEl.value = l.starter; sync(); run(); showTab("console");
+    codeEl.focus();
+  }
+  function setFeedback(msg, kind) {
+    const f = $("lbFeedback"); f.textContent = msg; f.className = "lb-feedback" + (kind ? " " + kind : "");
+  }
+  $("checkBtn").onclick = () => {
+    if (currentLesson < 0) return;
+    run();
+    const hint = LESSONS[currentLesson].check(result, codeEl.value);
+    if (hint === "") {
+      progress[currentLesson] = true; saveProgress(progress);
+      $("lbProgress").textContent = `${doneCount()} of ${LESSONS.length} complete`;
+      const last = currentLesson === LESSONS.length - 1;
+      setFeedback(last ? "✓ Correct — and that's the whole workbook. Well done!" : "✓ Correct! Press Next › to continue.", "ok");
+      if (doneCount() === LESSONS.length) toast("🎓 Workbook complete!");
+    } else {
+      setFeedback("✗ " + hint, "no");
+    }
+  };
+  $("lbNext").onclick = () => startLesson(Math.min(currentLesson + 1, LESSONS.length - 1));
+  $("lbPrev").onclick = () => startLesson(Math.max(currentLesson - 1, 0));
+  $("lbExit").onclick = () => { $("lessonbar").classList.remove("on"); currentLesson = -1; };
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  let loaded = false;
+  if (location.hash.indexOf("#code=") === 0) {
+    try { codeEl.value = decodeProgram(location.hash.slice(6)); loaded = true; } catch (e) {}
+  }
+  if (!loaded) codeEl.value = EXAMPLES["A first program"];
+  sync();
+  run();
+})();
+</script>
+</body>
+</html>
