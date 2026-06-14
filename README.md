@@ -31,6 +31,7 @@ run one step at a time.
 | **`plainvm.py`** | A **third** backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
 | **`test_plainlang.py`** | A 48-case test suite covering the language and its error messages. |
 | **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
+| **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
 ---
@@ -38,14 +39,22 @@ run one step at a time.
 ## Three things that make it more than a toy
 
 ### 1. Error messages that teach
-A beginner language lives or dies by what happens when you get it *wrong*. Every error
-points to a line and offers a way forward:
+A beginner language lives or dies by what happens when you get it *wrong*. Errors point
+to the exact source text with a caret, and an edit-distance check offers a way forward —
+Rust/Elm-grade diagnostics, aimed at someone on their first day:
 
 ```
-  Oops! Something went wrong on line 4:
+  Oops! Something went wrong on line 3:
     I haven't heard of a variable called 'scor' yet.
-  Hint: Create it first with:  set scor to ...
+
+    3 | say scor plus total
+            ^^^^
+  Hint: Did you mean 'score'?
 ```
+
+The same machinery catches mistyped functions and even mistyped keywords
+(`saay "hi"` → *Did you mean 'say'?*). Both Python back ends and the JavaScript engine
+build these through shared helpers, so the message is identical everywhere.
 
 ### 2. A time-travel debugger
 Running a program records a snapshot before every step. You can then scrub a slider to
