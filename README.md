@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 133 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 151 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -112,6 +112,14 @@ set fruits to list of "apple", "banana"
 add "cherry" to fruits
 say item 2 of fruits
 say length of fruits
+
+# Records (dictionaries) — named fields
+set player to record with "name" as "Ada", "score" as 0
+set item "score" of player to 150
+say item "name" of player
+for each field in keys of player
+    say field plus " = " plus item field of player
+end
 
 # Functions (with recursion)
 define double with n

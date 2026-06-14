@@ -434,6 +434,7 @@
   const KEYWORDS = new Set(("set to say ask into if then otherwise end repeat times while count from for each in " +
     "define with call return list of empty add remove item plus minus multiplied divided by is not greater less " +
     "than equal at least most and or true false length uppercase lowercase round absolute square root random between " +
+    "record as keys " +
     "move forward backward back turn left right pen up down color wait").split(" "));
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
@@ -645,6 +646,23 @@ end
 say "Scores:   " plus scores
 say "How many: " plus length of scores
 say "Average:  " plus (total divided by length of scores)`,
+
+    "Records (dictionaries)": `# A record holds named fields — like a little form.
+set player to record with "name" as "Ada", "score" as 0, "level" as 1
+
+say "Player: " plus item "name" of player
+
+# Update fields and add new ones
+set item "score" of player to 150
+set item "badge" of player to "gold"
+
+say "All fields:"
+for each field in keys of player
+    say "  " plus field plus " = " plus item field of player
+end
+
+say "That's " plus length of player plus " fields."
+say player`,
 
     "FizzBuzz": `count n from 1 to 20
     if n divided by 15 is equal to round of (n divided by 15) then

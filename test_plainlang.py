@@ -85,6 +85,19 @@ expect_output("for each", 'set xs to list of 1, 2, 3\nset s to 0\nfor each x in 
 expect_output("add to list", 'set xs to empty list\nadd 1 to xs\nadd 2 to xs\nsay xs', ["[1, 2]"])
 expect_output("remove from list", 'set xs to list of 1, 2, 3\nremove item 2 from xs\nsay xs', ["[1, 3]"])
 expect_output("list display", 'say list of "a", "b"', ["[a, b]"])
+expect_output("set list element", 'set xs to list of 1, 2, 3\nset item 2 of xs to 99\nsay xs', ["[1, 99, 3]"])
+
+# ── records (dictionaries) ─────────────────────────────────────────────────────
+print("Records")
+expect_output("create & read", 'set p to record with "name" as "Al", "age" as 9\nsay item "name" of p', ["Al"])
+expect_output("length is key count", 'set p to record with "a" as 1, "b" as 2\nsay length of p', ["2"])
+expect_output("keys of", 'set p to record with "a" as 1, "b" as 2\nsay keys of p', ["[a, b]"])
+expect_output("set a field (update)", 'set p to record with "n" as 1\nset item "n" of p to 5\nsay item "n" of p', ["5"])
+expect_output("set a field (new key)", 'set p to empty record\nset item "x" of p to 7\nsay p', ["{x: 7}"])
+expect_output("iterate keys", 'set p to record with "a" as 1, "b" as 2\nset t to 0\nfor each k in keys of p\nset t to t plus item k of p\nend\nsay t', ["3"])
+expect_output("record display", 'say record with "a" as 1, "b" as "two"', ["{a: 1, b: two}"])
+expect_error("missing key", 'set p to record with "name" as "Al"\nsay item "naem" of p', "no key")
+expect_error("missing key suggests", 'set p to record with "name" as "Al"\nsay item "naem" of p', "Did you mean 'name'?")
 
 # ── functions & recursion ─────────────────────────────────────────────────────
 print("Functions & recursion")

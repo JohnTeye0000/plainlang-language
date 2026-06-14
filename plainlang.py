@@ -158,6 +158,7 @@ KEYWORDS = {
     "and", "or", "true", "false",
     "length", "uppercase", "lowercase", "round", "absolute",
     "square", "root", "random", "between",
+    "record", "as", "keys",
 }
 
 
@@ -308,9 +309,33 @@ class Parser:
 
     def set_stmt(self):
         self.eat_kw("set")
+        # set item KEY of TARGET to VALUE  — update a list element or record field
+        if self.is_kw("item"):
+            self.advance()
+            key = self.expression()
+            self.eat_kw("of")
+            target = self.primary()
+            self.eat_kw("to")
+            return ("setindex", target, key, self.expression())
         name = self.eat("IDENT", "a variable name")[1]
         self.eat_kw("to")
         return ("set", name, self.expression())
+
+    def record_literal(self):
+        # record with KEY as VALUE, KEY as VALUE, ...
+        self.eat_kw("record")
+        self.eat_kw("with")
+        pairs = []
+        while True:
+            key = self.comparison()
+            self.eat_kw("as")
+            value = self.comparison()
+            pairs.append((key, value))
+            if self.kind() == "COMMA":
+                self.advance()
+            else:
+                break
+        return ("record", pairs)
 
     def say_stmt(self):
         self.eat_kw("say")
@@ -557,9 +582,12 @@ class Parser:
         if self.is_kw("false"):
             self.advance(); return ("bool", False)
 
-        # lists
+        # lists & records
         if self.is_kw("empty"):
-            self.advance(); self.eat_kw("list"); return ("list", [])
+            self.advance()
+            if self.is_kw("record"):
+                self.advance(); return ("record", [])
+            self.eat_kw("list"); return ("list", [])
         if self.is_kw("list"):
             self.advance(); self.eat_kw("of")
             items = [self.expression()]
@@ -567,6 +595,8 @@ class Parser:
                 self.advance()
                 items.append(self.expression())
             return ("list", items)
+        if self.is_kw("record"):
+            return self.record_literal()
         if self.is_kw("item"):
             self.advance()
             index = self.expression()
@@ -575,7 +605,7 @@ class Parser:
             return ("index", seq, index)
 
         # built-in functions
-        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute"):
+        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys"):
             name = self.advance()[1]
             self.eat_kw("of")
             return ("builtin", name, [self.primary()])
@@ -756,6 +786,23 @@ class Interpreter:
                     f"(it has {len(target)} item(s)).", self.current_line)
             target.pop(index - 1)
 
+        elif op == "setindex":
+            target = self.eval(node[1], env)
+            key = self.eval(node[2], env)
+            value = self.eval(node[3], env)
+            if isinstance(target, dict):
+                target[key] = value
+            elif isinstance(target, list):
+                i = int(key)
+                if i < 1 or i > len(target):
+                    raise PlainLangError(
+                        f"There is no item {i} (the list has {len(target)} item(s)).",
+                        self.current_line, "Lists start counting at item 1.")
+                target[i - 1] = value
+            else:
+                raise PlainLangError(
+                    "'set item ... of ...' needs a list or a record.", self.current_line)
+
     def call_function(self, name, arg_exprs, env):
         if name not in self.functions:
             raise unknown_function_error(name, self.functions.keys(), self.current_line)
@@ -785,12 +832,26 @@ class Interpreter:
         if op == "list":
             return [self.eval(e, env) for e in node[1]]
 
+        if op == "record":
+            d = {}
+            for k, v in node[1]:
+                d[self.eval(k, env)] = self.eval(v, env)
+            return d
+
         if op == "index":
             seq = self.eval(node[1], env)
             idx = self.eval(node[2], env)
+            if isinstance(seq, dict):
+                if idx not in seq:
+                    raise PlainLangError(
+                        f"There is no key '{self.to_str(idx)}' in that record.",
+                        self.current_line,
+                        _did_you_mean(self.to_str(idx), [self.to_str(k) for k in seq])
+                        or "Check the spelling of the key.")
+                return seq[idx]
             if not isinstance(seq, list):
                 raise PlainLangError(
-                    "'item ... of ...' needs a list.", self.current_line)
+                    "'item ... of ...' needs a list or a record.", self.current_line)
             i = int(idx)
             if i < 1 or i > len(seq):
                 raise PlainLangError(
@@ -870,10 +931,15 @@ class Interpreter:
     def _builtin(self, name, args):
         if name == "length":
             v = args[0]
-            if isinstance(v, (list, str)):
+            if isinstance(v, (list, str, dict)):
                 return len(v)
             raise PlainLangError(
-                "'length of' works on text or a list.", self.current_line)
+                "'length of' works on text, a list, or a record.", self.current_line)
+        if name == "keys":
+            v = args[0]
+            if isinstance(v, dict):
+                return list(v.keys())
+            raise PlainLangError("'keys of' works on a record.", self.current_line)
         if name == "uppercase":
             return self.to_str(args[0]).upper()
         if name == "lowercase":
@@ -899,7 +965,7 @@ class Interpreter:
             return v
         if isinstance(v, (int, float)):
             return v != 0
-        if isinstance(v, (str, list)):
+        if isinstance(v, (str, list, dict)):
             return len(v) > 0
         return v is not None
 
@@ -919,6 +985,9 @@ class Interpreter:
             return str(int(v))
         if isinstance(v, list):
             return "[" + ", ".join(self.to_str(x) for x in v) + "]"
+        if isinstance(v, dict):
+            return "{" + ", ".join(f"{self.to_str(k)}: {self.to_str(val)}"
+                                   for k, val in v.items()) + "}"
         return str(v)
 
     @staticmethod
@@ -927,6 +996,7 @@ class Interpreter:
         if isinstance(v, (int, float)):   return "a number"
         if isinstance(v, str):            return "some text"
         if isinstance(v, list):           return "a list"
+        if isinstance(v, dict):           return "a record"
         return "nothing"
 
 

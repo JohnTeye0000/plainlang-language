@@ -30,7 +30,7 @@ The working core, already built and tested:
 
 Grow PlainLang from "teaching toy" to genuinely expressive:
 
-- [ ] Dictionaries / records (key–value data)
+- [x] Dictionaries / records (key–value data) — *done across all engines, cross-validated*
 - [ ] `break` and `continue` for loops
 - [ ] First-class functions: functions stored in variables, passed as arguments
 - [ ] Higher-order built-ins: `map`, `filter`, `reduce` expressed in PlainLang's style

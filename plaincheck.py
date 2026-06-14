@@ -168,6 +168,10 @@ class Analyzer:
             self.walk_expr(n[1], scope, line); self.use_var(n[2], scope, line)
         elif op == "remove":
             self.walk_expr(n[1], scope, line); self.use_var(n[2], scope, line)
+        elif op == "setindex":
+            self.walk_expr(n[1], scope, line)   # target (read+mutated)
+            self.walk_expr(n[2], scope, line)   # key
+            self.walk_expr(n[3], scope, line)   # value
         # 'define' is analyzed in its own scope, not inline
 
     def walk_expr(self, node, scope, line):
@@ -192,6 +196,9 @@ class Analyzer:
         elif op == "list":
             for el in node[1]:
                 self.walk_expr(el, scope, line)
+        elif op == "record":
+            for k, v in node[1]:
+                self.walk_expr(k, scope, line); self.walk_expr(v, scope, line)
         # num / str / bool: nothing to check
 
     def use_var(self, name, scope, line):

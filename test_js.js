@@ -56,6 +56,14 @@ test("multiple arguments", () => {
 test("built-ins", () => {
   assert.deepStrictEqual(out('say uppercase of "hi"\nsay round of 3.7\nsay square root of 144').output, ["HI", "4", "12"]);
 });
+test("records: create, read, update, keys", () => {
+  const r = out('set p to record with "name" as "Al", "age" as 9\nset item "age" of p to 10\nset item "city" of p to "NYC"\nsay item "name" of p\nsay item "age" of p\nsay keys of p\nsay length of p\nsay p');
+  assert.deepStrictEqual(r.output, ["Al", "10", "[name, age, city]", "3", "{name: Al, age: 10, city: NYC}"]);
+});
+test("records: missing key gives a suggestion", () => {
+  const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
+  assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
+});
 test("turtle produces drawing segments", () => {
   const r = out("repeat 4 times\nmove forward 100\nturn right 90\nend");
   assert.strictEqual(r.turtle.length, 4);
@@ -76,6 +84,7 @@ for (const [name, src] of Object.entries({
   "vars": 'set a to 7\nsay a multiplied by 6',
   "loops": "count i from 1 to 5\nsay i\nend",
   "recursion": "define f with n\nif n is at most 1 then\nreturn 1\nend\nreturn n multiplied by f with (n minus 1)\nend\nsay f with 5",
+  "records": 'set p to record with "a" as 1, "b" as 2\nset item "c" of p to 3\nsay item "b" of p\nsay length of p\nsay keys of p\nsay p',
 })) {
   test(`transpiled JS matches interpreter: ${name}`, () => {
     const interp = out(src).output;

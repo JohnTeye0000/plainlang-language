@@ -106,6 +106,7 @@
     "and", "or", "true", "false",
     "length", "uppercase", "lowercase", "round", "absolute",
     "square", "root", "random", "between",
+    "record", "as", "keys",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -252,7 +253,32 @@
         `I don't know how to start a statement with ${this.describe(x)}.`, x[2], hint, col, len);
     }
 
-    setStmt() { this.eatKw("set"); const name = this.eat("IDENT", "a variable name")[1]; this.eatKw("to"); return ["set", name, this.expression()]; }
+    setStmt() {
+      this.eatKw("set");
+      if (this.isKw("item")) {   // set item KEY of TARGET to VALUE
+        this.advance();
+        const key = this.expression();
+        this.eatKw("of");
+        const target = this.primary();
+        this.eatKw("to");
+        return ["setindex", target, key, this.expression()];
+      }
+      const name = this.eat("IDENT", "a variable name")[1];
+      this.eatKw("to");
+      return ["set", name, this.expression()];
+    }
+    recordLiteral() {
+      this.eatKw("record"); this.eatKw("with");
+      const pairs = [];
+      for (;;) {
+        const key = this.comparison();
+        this.eatKw("as");
+        const value = this.comparison();
+        pairs.push([key, value]);
+        if (this.kind() === "COMMA") this.advance(); else break;
+      }
+      return ["record", pairs];
+    }
     sayStmt() { this.eatKw("say"); return ["say", this.expression()]; }
     askStmt() { this.eatKw("ask"); const p = this.expression(); this.eatKw("into"); const name = this.eat("IDENT", "a variable name")[1]; return ["ask", p, name]; }
 
@@ -404,15 +430,20 @@
       if (x[0] === "LPAREN") { this.advance(); const e = this.expression(); this.eat("RPAREN", "a closing ')'"); return e; }
       if (this.isKw("true")) { this.advance(); return ["bool", true]; }
       if (this.isKw("false")) { this.advance(); return ["bool", false]; }
-      if (this.isKw("empty")) { this.advance(); this.eatKw("list"); return ["list", []]; }
+      if (this.isKw("empty")) {
+        this.advance();
+        if (this.isKw("record")) { this.advance(); return ["record", []]; }
+        this.eatKw("list"); return ["list", []];
+      }
       if (this.isKw("list")) {
         this.advance(); this.eatKw("of");
         const items = [this.expression()];
         while (this.kind() === "COMMA") { this.advance(); items.push(this.expression()); }
         return ["list", items];
       }
+      if (this.isKw("record")) return this.recordLiteral();
       if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
-      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute")) {
+      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys")) {
         const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
       }
       if (this.isKw("square")) { this.advance(); this.eatKw("root"); this.eatKw("of"); return ["builtin", "sqrt", [this.primary()]]; }
@@ -555,6 +586,18 @@
         if (idx < 1 || idx > t.length) throw new PlainLangError(`There is no item ${idx} in '${node[2]}' (it has ${t.length} item(s)).`, this.currentLine);
         t.splice(idx - 1, 1); return;
       }
+      if (op === "setindex") {
+        const target = this.eval(node[1], env);
+        const key = this.eval(node[2], env);
+        const value = this.eval(node[3], env);
+        if (isDict(target)) { target[key] = value; return; }
+        if (Array.isArray(target)) {
+          const i = Math.floor(key);
+          if (i < 1 || i > target.length) throw new PlainLangError(`There is no item ${i} (the list has ${target.length} item(s)).`, this.currentLine, "Lists start counting at item 1.");
+          target[i - 1] = value; return;
+        }
+        throw new PlainLangError("'set item ... of ...' needs a list or a record.", this.currentLine);
+      }
       // turtle
       if (op === "move") {
         const dist = this.eval(node[2], env);
@@ -596,9 +639,21 @@
       if (op === "var") return env.get(node[1], this.currentLine);
       if (op === "neg") return -this.eval(node[1], env);
       if (op === "list") return node[1].map((e) => this.eval(e, env));
+      if (op === "record") {
+        const d = {};
+        for (const [k, v] of node[1]) d[this.eval(k, env)] = this.eval(v, env);
+        return d;
+      }
       if (op === "index") {
-        const seq = this.eval(node[1], env); const i = Math.floor(this.eval(node[2], env));
-        if (!Array.isArray(seq)) throw new PlainLangError("'item ... of ...' needs a list.", this.currentLine);
+        const seq = this.eval(node[1], env);
+        const rawKey = this.eval(node[2], env);
+        if (isDict(seq)) {
+          if (!(rawKey in seq)) throw new PlainLangError(`There is no key '${toStr(rawKey)}' in that record.`, this.currentLine,
+            didYouMean(toStr(rawKey), Object.keys(seq)) || "Check the spelling of the key.");
+          return seq[rawKey];
+        }
+        if (!Array.isArray(seq)) throw new PlainLangError("'item ... of ...' needs a list or a record.", this.currentLine);
+        const i = Math.floor(rawKey);
         if (i < 1 || i > seq.length) throw new PlainLangError(`There is no item ${i} (the list has ${seq.length} item(s)).`, this.currentLine, "Lists start counting at item 1.");
         return seq[i - 1];
       }
@@ -648,7 +703,12 @@
       if (name === "length") {
         const v = args[0];
         if (Array.isArray(v) || typeof v === "string") return v.length;
-        throw new PlainLangError("'length of' works on text or a list.", this.currentLine);
+        if (isDict(v)) return Object.keys(v).length;
+        throw new PlainLangError("'length of' works on text, a list, or a record.", this.currentLine);
+      }
+      if (name === "keys") {
+        if (isDict(args[0])) return Object.keys(args[0]);
+        throw new PlainLangError("'keys of' works on a record.", this.currentLine);
       }
       if (name === "uppercase") return toStr(args[0]).toUpperCase();
       if (name === "lowercase") return toStr(args[0]).toLowerCase();
@@ -667,10 +727,12 @@
   }
 
   // ─── Shared helpers ──────────────────────────────────────────────────────
+  function isDict(v) { return v != null && typeof v === "object" && !Array.isArray(v); }
   function truthy(v) {
     if (typeof v === "boolean") return v;
     if (typeof v === "number") return v !== 0;
     if (typeof v === "string" || Array.isArray(v)) return v.length > 0;
+    if (isDict(v)) return Object.keys(v).length > 0;
     return v != null;
   }
   function coerceInput(raw) {
@@ -682,6 +744,7 @@
     if (typeof v === "boolean") return v ? "true" : "false";
     if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);
     if (Array.isArray(v)) return "[" + v.map(toStr).join(", ") + "]";
+    if (isDict(v)) return "{" + Object.keys(v).map((k) => `${k}: ${toStr(v[k])}`).join(", ") + "}";
     if (v == null) return "nothing";
     return String(v);
   }
@@ -690,6 +753,7 @@
     if (typeof v === "number") return "a number";
     if (typeof v === "string") return "some text";
     if (Array.isArray(v)) return "a list";
+    if (isDict(v)) return "a record";
     return "nothing";
   }
 
@@ -719,6 +783,7 @@
         '  if (typeof v === "boolean") return v ? "true" : "false";',
         '  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);',
         '  if (Array.isArray(v)) return "[" + v.map(format).join(", ") + "]";',
+        '  if (v && typeof v === "object") return "{" + Object.keys(v).map((k) => k + ": " + format(v[k])).join(", ") + "}";',
         "  return String(v);",
         "}",
       ];
@@ -729,6 +794,14 @@
         "  return lo + Math.floor(Math.random() * (hi - lo + 1));",
         "}");
       if (/\bask\(/.test(body)) parts.push("const ask = (q) => prompt(q);");
+      // 'item ... of ...' and 'length of' work on both lists and records, so a
+      // small runtime helper picks the right behaviour (lists are 1-indexed).
+      if (/\bitemOf\(/.test(body)) parts.push(
+        "const itemOf = (c, k) => Array.isArray(c) ? c[k - 1] : c[k];");
+      if (/\bsetItemOf\(/.test(body)) parts.push(
+        "function setItemOf(c, k, v) { if (Array.isArray(c)) c[k - 1] = v; else c[k] = v; }");
+      if (/\bsizeOf\(/.test(body)) parts.push(
+        "const sizeOf = (x) => Array.isArray(x) || typeof x === \"string\" ? x.length : Object.keys(x).length;");
       if (/\bturtle\./.test(body)) parts.push(
         "// 'turtle' would be your drawing library (move the pen across a canvas).");
       return parts.join("\n") + "\n\n";
@@ -783,6 +856,7 @@
         case "call": this.emit(`${node[1]}(${node[2].map((a) => this.expr(a)).join(", ")});`); break;
         case "add":  this.emit(`${node[2]}.push(${this.expr(node[1])});`); break;
         case "remove": this.emit(`${node[2]}.splice(${this.expr(node[1])} - 1, 1);`); break;
+        case "setindex": this.emit(`setItemOf(${this.expr(node[1])}, ${this.expr(node[2])}, ${this.expr(node[3])});`); break;
         case "move": this.emit(`turtle.${node[1] === "forward" ? "forward" : "back"}(${this.expr(node[2])});`); break;
         case "turn": this.emit(`turtle.${node[1]}(${this.expr(node[2])});`); break;
         case "pen":  this.emit(`turtle.${node[1] === "down" ? "penDown" : "penUp"}();`); break;
@@ -811,7 +885,8 @@
       if (op === "var") return node[1];
       if (op === "neg") return `(-${this.expr(node[1])})`;
       if (op === "list") return "[" + node[1].map((e) => this.expr(e)).join(", ") + "]";
-      if (op === "index") return `${this.expr(node[1])}[${this.expr(node[2])} - 1]`;
+      if (op === "record") return "{ " + node[1].map(([k, v]) => `[${this.expr(k)}]: ${this.expr(v)}`).join(", ") + " }";
+      if (op === "index") return `itemOf(${this.expr(node[1])}, ${this.expr(node[2])})`;
       if (op === "binop") return `(${this.expr(node[2])} ${node[1]} ${this.expr(node[3])})`;
       if (op === "cmp") {
         const js = { "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<=" }[node[1]];
@@ -824,7 +899,8 @@
       if (op === "builtin") {
         const a = node[2].map((x) => this.expr(x));
         switch (node[1]) {
-          case "length":    return `${a[0]}.length`;
+          case "length":    return `sizeOf(${a[0]})`;
+          case "keys":      return `Object.keys(${a[0]})`;
           case "uppercase": return `String(${a[0]}).toUpperCase()`;
           case "lowercase": return `String(${a[0]}).toLowerCase()`;
           case "round":     return `Math.round(${a[0]})`;

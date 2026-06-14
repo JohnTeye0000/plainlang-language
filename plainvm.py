@@ -34,6 +34,8 @@ def to_str(v):
         return str(int(v))
     if isinstance(v, list):
         return "[" + ", ".join(to_str(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{to_str(k)}: {to_str(val)}" for k, val in v.items()) + "}"
     if v is None:
         return "nothing"
     return str(v)
@@ -44,7 +46,7 @@ def truthy(v):
         return v
     if isinstance(v, (int, float)):
         return v != 0
-    if isinstance(v, (str, list)):
+    if isinstance(v, (str, list, dict)):
         return len(v) > 0
     return v is not None
 
@@ -54,6 +56,7 @@ def type_name(v):
     if isinstance(v, (int, float)):   return "a number"
     if isinstance(v, str):            return "some text"
     if isinstance(v, list):           return "a list"
+    if isinstance(v, dict):           return "a record"
     return "nothing"
 
 
@@ -147,6 +150,10 @@ class Compiler:
 
     def s_remove(self, node):
         self.expr(node[1]); self.emit("LIST_REMOVE", node[2])
+
+    def s_setindex(self, node):
+        _, target, key, value = node
+        self.expr(target); self.expr(key); self.expr(value); self.emit("SET_INDEX")
 
     def s_define(self, node):
         pass   # functions are hoisted & compiled separately
@@ -256,6 +263,11 @@ class Compiler:
         for el in node[1]:
             self.expr(el)
         self.emit("BUILD_LIST", len(node[1]))
+
+    def e_record(self, node):
+        for k, v in node[1]:
+            self.expr(k); self.expr(v)
+        self.emit("BUILD_RECORD", len(node[1]))
 
     def e_index(self, node):
         self.expr(node[1]); self.expr(node[2]); self.emit("GET_ITEM")
@@ -487,6 +499,29 @@ class VM:
                     items = stack[-arg:]; del stack[-arg:]; push(list(items))
                 else:
                     push([])
+            elif op == "BUILD_RECORD":
+                cnt = arg * 2
+                if cnt:
+                    vals = stack[-cnt:]; del stack[-cnt:]
+                else:
+                    vals = ()
+                d = {}
+                for k in range(0, cnt, 2):
+                    d[vals[k]] = vals[k + 1]
+                push(d)
+            elif op == "SET_INDEX":
+                value = pop(); key = pop(); target = pop(); self.line = line
+                if isinstance(target, dict):
+                    target[key] = value
+                elif isinstance(target, list):
+                    idx = int(key)
+                    if idx < 1 or idx > len(target):
+                        raise PlainLangError(
+                            f"There is no item {idx} (the list has {len(target)} item(s)).",
+                            line, "Lists start counting at item 1.")
+                    target[idx - 1] = value
+                else:
+                    raise PlainLangError("'set item ... of ...' needs a list or a record.", line)
             elif op == "GET_ITEM":
                 i = pop(); seq = pop(); self.line = line; push(self.get_item(seq, i))
             elif op == "BUILTIN":
@@ -556,8 +591,15 @@ class VM:
             raise PlainLangError(f"I can't compare {type_name(a)} with {type_name(b)}.", self.line)
 
     def get_item(self, seq, i):
+        if isinstance(seq, dict):
+            if i not in seq:
+                raise PlainLangError(
+                    f"There is no key '{to_str(i)}' in that record.", self.line,
+                    pl._did_you_mean(to_str(i), [to_str(k) for k in seq])
+                    or "Check the spelling of the key.")
+            return seq[i]
         if not isinstance(seq, list):
-            raise PlainLangError("'item ... of ...' needs a list.", self.line)
+            raise PlainLangError("'item ... of ...' needs a list or a record.", self.line)
         i = int(i)
         if i < 1 or i > len(seq):
             raise PlainLangError(f"There is no item {i} (the list has {len(seq)} item(s)).",
@@ -568,8 +610,11 @@ class VM:
         import math
         if name == "length":
             v = args[0]
-            if isinstance(v, (list, str)): return len(v)
-            raise PlainLangError("'length of' works on text or a list.", self.line)
+            if isinstance(v, (list, str, dict)): return len(v)
+            raise PlainLangError("'length of' works on text, a list, or a record.", self.line)
+        if name == "keys":
+            if isinstance(args[0], dict): return list(args[0].keys())
+            raise PlainLangError("'keys of' works on a record.", self.line)
         if name == "uppercase": return to_str(args[0]).upper()
         if name == "lowercase": return to_str(args[0]).lower()
         if name == "round":     return round(args[0])
