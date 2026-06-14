@@ -1,5 +1,8 @@
 # PlainLang
 
+[![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
+&nbsp;·&nbsp; 133 passing tests &nbsp;·&nbsp; 3 execution back ends
+
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
 ```
@@ -34,6 +37,7 @@ run one step at a time.
 | **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
 | **`test_check.py`** | An 18-case suite for the static analyzer (and its precision — clean code must not be flagged). |
+| **`test_js.js`** | A 19-case Node suite for the JavaScript engine, transpiler, and diagnostics. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
 ---
