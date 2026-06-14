@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Scratch / temp files
+_*.py
+_*.js
+_*.plang
+
+# OS
+.DS_Store
+Thumbs.db

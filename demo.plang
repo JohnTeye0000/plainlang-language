@@ -1,0 +1,101 @@
+# ════════════════════════════════════════════════
+#  PlainLang — feature tour
+# ════════════════════════════════════════════════
+
+say "── Variables & math ──"
+set name to "Alice"
+set price to 20
+set quantity to 3
+set total to price multiplied by quantity
+say name plus " owes $" plus total
+
+say ""
+say "── Decisions (if / otherwise) ──"
+set age to 15
+if age is at least 18 then
+    say "You are an adult."
+otherwise if age is at least 13 then
+    say "You are a teenager."
+otherwise
+    say "You are a child."
+end
+
+say ""
+say "── Boolean logic ──"
+set has_ticket to true
+set is_member to false
+if has_ticket and is_member then
+    say "Welcome, VIP!"
+otherwise if has_ticket or is_member then
+    say "Welcome in."
+otherwise
+    say "Sorry, you can't enter."
+end
+
+say ""
+say "── Counting loop ──"
+count i from 1 to 5
+    say "Step " plus i
+end
+
+say ""
+say "── Lists & for-each ──"
+set scores to list of 90, 75, 88, 95, 60
+set total to 0
+for each s in scores
+    set total to total plus s
+end
+say "Scores: " plus scores
+say "Count:  " plus length of scores
+say "Sum:    " plus total
+say "Average:" plus (total divided by length of scores)
+
+say ""
+say "── Growing a list ──"
+set basket to empty list
+add "apple" to basket
+add "banana" to basket
+add "cherry" to basket
+say "Basket: " plus basket
+remove item 2 from basket
+say "After removing item 2: " plus basket
+
+say ""
+say "── Functions & return values ──"
+define double with n
+    return n multiplied by 2
+end
+
+define greet with person
+    say "Hi there, " plus person plus "!"
+end
+
+say "Double of 21 is " plus double with 21
+call greet with name
+
+say ""
+say "── Recursion (factorial) ──"
+define factorial with n
+    if n is at most 1 then
+        return 1
+    end
+    return n multiplied by factorial with (n minus 1)
+end
+say "5 factorial is " plus factorial with 5
+
+say ""
+say "── Built-in helpers ──"
+say "LOUD: " plus uppercase of "hello"
+say "quiet: " plus lowercase of "WORLD"
+say "Square root of 144 is " plus square root of 144
+say "Rounded 3.7 is " plus round of 3.7
+say "Absolute of -8 is " plus absolute of (minus 8)
+
+say ""
+say "── A tiny guessing-style demo (fixed numbers) ──"
+set secret to 7
+count guess from 1 to 10
+    if guess is equal to secret then
+        say "Found the secret number: " plus guess
+    end
+end
