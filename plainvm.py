@@ -95,6 +95,7 @@ class Compiler:
         self.chunk = Chunk(name)
         self.line = 0
         self._tmp = 0
+        self.loops = []   # stack of {"breaks": [...], "continues": [...]} for stop/skip
 
     # — emit helpers —
     def emit(self, op, arg=None):
@@ -172,15 +173,40 @@ class Compiler:
         for j in end_jumps:
             self.patch(j, self.here())
 
+    # — stop / skip (break / continue) —
+    # Each loop pushes a context; 'stop' and 'skip' emit JUMPs whose targets are
+    # backpatched once the loop's end and continue-points are known. This is how
+    # a compiler resolves forward branches across arbitrarily nested loops.
+    def s_break(self, node):
+        if not self.loops:
+            raise PlainLangError("'stop' can only be used inside a loop.", self.line)
+        self.loops[-1]["breaks"].append(self.emit("JUMP", None))
+
+    def s_continue(self, node):
+        if not self.loops:
+            raise PlainLangError("'skip' can only be used inside a loop.", self.line)
+        self.loops[-1]["continues"].append(self.emit("JUMP", None))
+
+    def _close_loop(self, cont_target, end_target, extra_exits=()):
+        ctx = self.loops.pop()
+        for j in ctx["continues"]:
+            self.patch(j, cont_target)
+        for j in list(ctx["breaks"]) + list(extra_exits):
+            self.patch(j, end_target)
+
     def s_while(self, node):
+        self.loops.append({"breaks": [], "continues": []})
         test = self.here()
         self.expr(node[1])
         j_exit = self.emit("JUMP_IF_FALSE", None)
         self.block(node[2])
+        cont = self.here()                 # 'skip' lands here -> re-test
         self.emit("JUMP", test)
-        self.patch(j_exit, self.here())
+        end = self.here()
+        self._close_loop(cont, end, [j_exit])
 
     def s_repeat(self, node):
+        self.loops.append({"breaks": [], "continues": []})
         cnt, i = self.newtmp("cnt"), self.newtmp("i")
         self.expr(node[1]); self.emit("STORE", cnt)
         self.const(0); self.emit("STORE", i)
@@ -188,9 +214,11 @@ class Compiler:
         self.emit("LOAD", i); self.emit("LOAD", cnt); self.emit("LT")
         j_exit = self.emit("JUMP_IF_FALSE", None)
         self.block(node[2])
+        cont = self.here()                 # 'skip' -> advance the counter, re-test
         self.emit("LOAD", i); self.const(1); self.emit("ADD"); self.emit("STORE", i)
         self.emit("JUMP", test)
-        self.patch(j_exit, self.here())
+        end = self.here()
+        self._close_loop(cont, end, [j_exit])
 
     def s_count(self, node):
         # count VAR from START to STOP ... end   (works up OR down)
@@ -206,6 +234,7 @@ class Compiler:
             self.emit("LOAD", step_t); self.emit("MUL")
             self.const(0); self.emit("LE")
 
+        self.loops.append({"breaks": [], "continues": []})
         self.expr(start); self.emit("STORE", var)
         self.expr(stop);  self.emit("STORE", stop_t)
         # step = (stop >= start) ? 1 : -1     (var still equals start here)
@@ -221,17 +250,19 @@ class Compiler:
         j_end = self.emit("JUMP_IF_FALSE", None)
         body_start = self.here()
         self.block(body)
+        cont = self.here()                          # 'skip' -> advance the variable
         self.emit("LOAD", var); self.emit("LOAD", step_t); self.emit("ADD"); self.emit("STORE", next_t)
         in_range_test(next_t)                        # is the NEXT value in range?
         j_exit = self.emit("JUMP_IF_FALSE", None)
         self.emit("LOAD", next_t); self.emit("STORE", var)
         self.emit("JUMP", body_start)
-        self.patch(j_exit, self.here())
-        self.patch(j_end, self.here())
+        end = self.here()
+        self._close_loop(cont, end, [j_exit, j_end])
 
     def s_foreach(self, node):
         _, var, seq, body = node
         seq_t, idx_t = self.newtmp("seq"), self.newtmp("idx")
+        self.loops.append({"breaks": [], "continues": []})
         self.expr(seq); self.emit("STORE", seq_t)
         self.const(0); self.emit("STORE", idx_t)
         test = self.here()
@@ -241,9 +272,11 @@ class Compiler:
         self.emit("LOAD", seq_t); self.emit("LOAD", idx_t); self.const(1); self.emit("ADD")
         self.emit("GET_ITEM"); self.emit("STORE", var)
         self.block(body)
+        cont = self.here()                          # 'skip' -> advance the index
         self.emit("LOAD", idx_t); self.const(1); self.emit("ADD"); self.emit("STORE", idx_t)
         self.emit("JUMP", test)
-        self.patch(j_exit, self.here())
+        end = self.here()
+        self._close_loop(cont, end, [j_exit])
 
     # — expressions (each leaves exactly one value on the stack) —
     def expr(self, node):

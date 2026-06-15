@@ -107,6 +107,7 @@
     "length", "uppercase", "lowercase", "round", "absolute",
     "square", "root", "random", "between",
     "record", "as", "keys",
+    "stop", "skip",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -237,6 +238,8 @@
       if (this.isKw("return")) return this.returnStmt();
       if (this.isKw("add")) return this.addStmt();
       if (this.isKw("remove")) return this.removeStmt();
+      if (this.isKw("stop")) { this.advance(); return ["break"]; }
+      if (this.isKw("skip")) { this.advance(); return ["continue"]; }
       if (this.isKw("move")) return this.moveStmt();
       if (this.isKw("turn")) return this.turnStmt();
       if (this.isKw("pen")) return this.penStmt();
@@ -467,6 +470,10 @@
 
   // ─── Interpreter ─────────────────────────────────────────────────────────
   const RETURN = Symbol("return");
+  const BREAK = Symbol("break");        // thrown by 'stop'
+  const CONTINUE = Symbol("continue");  // thrown by 'skip'
+  const breakSignal = () => { const e = new Error("stop"); e[BREAK] = true; return e; };
+  const continueSignal = () => { const e = new Error("skip"); e[CONTINUE] = true; return e; };
 
   class Environment {
     constructor(parent) { this.vars = Object.create(null); this.parent = parent || null; }
@@ -552,26 +559,28 @@
       if (op === "repeat") {
         const c = this.eval(node[1], env);
         if (typeof c !== "number") throw new PlainLangError("'repeat' needs a number of times to repeat.", this.currentLine);
-        for (let k = 0; k < Math.floor(c); k++) this.execBlock(node[2], env);
+        for (let k = 0; k < Math.floor(c); k++) { this.tick(); if (this.loopBody(node[2], env)) break; }
         return;
       }
       if (op === "while") {
-        while (truthy(this.eval(node[1], env))) { this.tick(); this.execBlock(node[2], env); }
+        while (truthy(this.eval(node[1], env))) { this.tick(); if (this.loopBody(node[2], env)) break; }
         return;
       }
       if (op === "count") {
         const start = Math.floor(this.eval(node[2], env));
         const stop = Math.floor(this.eval(node[3], env));
         const step = stop >= start ? 1 : -1;
-        for (let i = start; step > 0 ? i <= stop : i >= stop; i += step) { this.tick(); env.assign(node[1], i); this.execBlock(node[4], env); }
+        for (let i = start; step > 0 ? i <= stop : i >= stop; i += step) { this.tick(); env.assign(node[1], i); if (this.loopBody(node[4], env)) break; }
         return;
       }
       if (op === "foreach") {
         const seq = this.eval(node[2], env);
         if (!Array.isArray(seq)) throw new PlainLangError("'for each' needs a list to walk through.", this.currentLine, "Make one with:  set things to list of 1, 2, 3");
-        for (const item of seq) { this.tick(); env.assign(node[1], item); this.execBlock(node[3], env); }
+        for (const item of seq) { this.tick(); env.assign(node[1], item); if (this.loopBody(node[3], env)) break; }
         return;
       }
+      if (op === "break") { throw breakSignal(); }
+      if (op === "continue") { throw continueSignal(); }
       if (op === "define") { this.functions[node[1]] = { params: node[2], body: node[3] }; return; }
       if (op === "call") { this.callFunction(node[1], node[2], env); return; }
       if (op === "return") { const v = this.eval(node[1], env); const e = new Error("return"); e[RETURN] = true; e.value = v; throw e; }
@@ -617,6 +626,13 @@
       if (op === "pen") { this.turtle.penDown = node[1] === "down"; return; }
       if (op === "pencolor") { this.turtle.color = String(this.eval(node[1], env)); return; }
       if (op === "wait") { return; /* no-op in trace model; UI controls timing */ }
+    }
+
+    loopBody(body, env) {
+      // Run one pass of a loop body; return true if 'stop' was requested.
+      try { this.execBlock(body, env); }
+      catch (e) { if (e[CONTINUE]) return false; if (e[BREAK]) return true; throw e; }
+      return false;
     }
 
     callFunction(name, argExprs, env) {
@@ -862,6 +878,8 @@
         case "pen":  this.emit(`turtle.${node[1] === "down" ? "penDown" : "penUp"}();`); break;
         case "pencolor": this.emit(`turtle.color(${this.expr(node[1])});`); break;
         case "wait": this.emit(`// wait`); break;
+        case "break": this.emit(`break;`); break;
+        case "continue": this.emit(`continue;`); break;
         case "if": {
           const [branches, elseBlock] = [node[1], node[2]];
           branches.forEach(([cond, body], idx) => {
@@ -934,6 +952,11 @@
       }
       if (e && e[RETURN]) {
         return { ok: true, error: null, output: interp.output, trace: interp.trace, turtle: interp.segments };
+      }
+      if (e && (e[BREAK] || e[CONTINUE])) {
+        const word = e[BREAK] ? "stop" : "skip";
+        const err = new PlainLangError(`'${word}' can only be used inside a loop.`);
+        return { ok: false, error: formatError(source, err), output: interp.output, trace: interp.trace, turtle: interp.segments };
       }
       return { ok: false, error: "Unexpected problem: " + (e && e.message), output: interp.output, trace: interp.trace, turtle: interp.segments };
     }

@@ -54,6 +54,9 @@ has("unknown function", 'say nope with 1', "don't know a function", "error")
 has("arity too many", 'define f with a\nreturn a\nend\nsay f with 1 and 2', "expects 1", "error")
 has("arity too few", 'define f with a and b\nreturn a\nend\nsay f with 1', "expects 2", "error")
 has("unreachable code", 'define f with n\nreturn n\nsay "after"\nend\nsay f with 1', "can never run", "warning")
+has("stop outside a loop", 'say "x"\nstop', "only be used inside a loop", "error")
+has("skip outside a loop", 'skip', "only be used inside a loop", "error")
+clean("stop inside a loop is fine", 'count i from 1 to 5\nif i is equal to 3 then\nstop\nend\nsay i\nend')
 has("function used as a value", 'define f with n\nreturn n\nend\nsay f', "is a function", "error")
 
 # ── multi-error reporting: many problems at once ──────────────────────────────

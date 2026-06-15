@@ -56,6 +56,7 @@ class Analyzer:
         self.bodies = {}         # name -> body block
         self.reads = set()       # every name read anywhere (for the unused check)
         self.defs = []           # (name, line) for set/ask, for the unused check
+        self.loop_depth = 0      # >0 means we're inside a loop (for stop/skip)
 
     # — diagnostic helpers —
     def add(self, severity, message, line, hint=None, near=None):
@@ -126,17 +127,22 @@ class Analyzer:
         return self.diags
 
     # — walking —
+    def walk_loop(self, block, scope):
+        self.loop_depth += 1
+        self.walk_block(block, scope)
+        self.loop_depth -= 1
+
     def walk_block(self, block, scope):
-        returned = False
+        TERMINATORS = {"return": "return", "break": "stop", "continue": "skip"}
+        ended_by = None
         for stmt in block[1]:
             line = stmt[1] if stmt[0] == "@" else None
             n = _unwrap(stmt)
-            if returned:
-                self.warn("This line can never run — it comes after a 'return'.", line)
+            if ended_by:
+                self.warn(f"This line can never run — it comes after '{ended_by}'.", line)
                 break
             self.walk_stmt(n, scope, line)
-            if n[0] == "return":
-                returned = True
+            ended_by = TERMINATORS.get(n[0])
 
     def walk_stmt(self, n, scope, line):
         op = n[0]
@@ -154,14 +160,20 @@ class Analyzer:
             if n[2]:
                 self.walk_block(n[2], scope)
         elif op == "while":
-            self.walk_expr(n[1], scope, line); self.walk_block(n[2], scope)
+            self.walk_expr(n[1], scope, line); self.walk_loop(n[2], scope)
         elif op == "repeat":
-            self.walk_expr(n[1], scope, line); self.walk_block(n[2], scope)
+            self.walk_expr(n[1], scope, line); self.walk_loop(n[2], scope)
         elif op == "count":
             self.walk_expr(n[2], scope, line); self.walk_expr(n[3], scope, line)
-            self.walk_block(n[4], scope)
+            self.walk_loop(n[4], scope)
         elif op == "foreach":
-            self.walk_expr(n[2], scope, line); self.walk_block(n[3], scope)
+            self.walk_expr(n[2], scope, line); self.walk_loop(n[3], scope)
+        elif op == "break":
+            if self.loop_depth == 0:
+                self.error("'stop' can only be used inside a loop.", line)
+        elif op == "continue":
+            if self.loop_depth == 0:
+                self.error("'skip' can only be used inside a loop.", line)
         elif op == "call":
             self.walk_expr(n, scope, line)
         elif op == "add":

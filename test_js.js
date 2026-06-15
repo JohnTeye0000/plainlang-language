@@ -41,6 +41,15 @@ test("count leaves last value (not overshoot)", () => {
 test("while loop", () => {
   assert.deepStrictEqual(out("set x to 0\nwhile x is less than 3\nset x to x plus 1\nsay x\nend").output, ["1", "2", "3"]);
 });
+test("stop and skip", () => {
+  assert.deepStrictEqual(out("count i from 1 to 9\nif i is equal to 3 then\nskip\nend\nif i is greater than 6 then\nstop\nend\nsay i\nend").output, ["1", "2", "4", "5", "6"]);
+});
+test("stop only exits inner loop", () => {
+  assert.deepStrictEqual(out('count a from 1 to 2\ncount b from 1 to 9\nif b is greater than 1 then\nstop\nend\nsay a plus "-" plus b\nend\nend').output, ["1-1", "2-1"]);
+});
+test("stop outside a loop errors", () => {
+  assert.ok(/only be used inside a loop/.test(out("say 1\nstop").error));
+});
 test("lists & for-each", () => {
   assert.deepStrictEqual(out("set xs to list of 4, 8, 15\nset t to 0\nfor each n in xs\nset t to t plus n\nend\nsay t").output, ["27"]);
 });
@@ -85,6 +94,7 @@ for (const [name, src] of Object.entries({
   "loops": "count i from 1 to 5\nsay i\nend",
   "recursion": "define f with n\nif n is at most 1 then\nreturn 1\nend\nreturn n multiplied by f with (n minus 1)\nend\nsay f with 5",
   "records": 'set p to record with "a" as 1, "b" as 2\nset item "c" of p to 3\nsay item "b" of p\nsay length of p\nsay keys of p\nsay p',
+  "stop/skip": "count i from 1 to 9\nif i is equal to 3 then\nskip\nend\nif i is greater than 6 then\nstop\nend\nsay i\nend",
 })) {
   test(`transpiled JS matches interpreter: ${name}`, () => {
     const interp = out(src).output;

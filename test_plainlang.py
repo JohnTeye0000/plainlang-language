@@ -77,6 +77,20 @@ expect_output("while", 'set x to 0\nwhile x is less than 3\nset x to x plus 1\ns
 expect_output("variable persists after loop",
     'set t to 0\ncount i from 1 to 4\nset t to t plus i\nend\nsay t', ["10"])
 
+# ── loop control: stop / skip ──────────────────────────────────────────────────
+print("Loop control (stop / skip)")
+expect_output("stop exits a loop",
+    'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend', ["1", "2", "3"])
+expect_output("skip jumps to next pass",
+    'count i from 1 to 5\nif i is equal to 3 then\nskip\nend\nsay i\nend', ["1", "2", "4", "5"])
+expect_output("skip in a while still advances",
+    'set x to 0\nwhile x is less than 5\nset x to x plus 1\nif x is equal to 2 then\nskip\nend\nsay x\nend', ["1", "3", "4", "5"])
+expect_output("stop only exits the inner loop",
+    'count a from 1 to 2\ncount b from 1 to 9\nif b is greater than 1 then\nstop\nend\nsay a plus "-" plus b\nend\nend', ["1-1", "2-1"])
+expect_output("stop in for-each",
+    'for each n in list of 5, 6, 7, 8\nif n is equal to 7 then\nstop\nend\nsay n\nend', ["5", "6"])
+expect_error("stop outside a loop is an error", 'say "hi"\nstop', "only be used inside a loop")
+
 # ── lists ─────────────────────────────────────────────────────────────────────
 print("Lists")
 expect_output("list literal & length", 'set xs to list of 1, 2, 3\nsay length of xs', ["3"])

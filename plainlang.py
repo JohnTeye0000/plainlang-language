@@ -159,6 +159,7 @@ KEYWORDS = {
     "length", "uppercase", "lowercase", "round", "absolute",
     "square", "root", "random", "between",
     "record", "as", "keys",
+    "stop", "skip",
 }
 
 
@@ -293,6 +294,8 @@ class Parser:
         if self.is_kw("return"):  return self.return_stmt()
         if self.is_kw("add"):     return self.add_stmt()
         if self.is_kw("remove"):  return self.remove_stmt()
+        if self.is_kw("stop"):    self.advance(); return ("break",)
+        if self.is_kw("skip"):    self.advance(); return ("continue",)
         if self.kind() == "IDENT":
             return self.call_stmt()  # bare function call, e.g. greet with "Bob"
         t = self.peek()
@@ -645,6 +648,14 @@ class ReturnSignal(Exception):
         self.value = value
 
 
+class BreakSignal(Exception):
+    """Raised by 'stop' to leave the nearest loop."""
+
+
+class ContinueSignal(Exception):
+    """Raised by 'skip' to jump to the next pass of the nearest loop."""
+
+
 class Environment:
     def __init__(self, parent=None):
         self.vars = {}
@@ -721,12 +732,14 @@ class Interpreter:
                 raise PlainLangError(
                     "'repeat' needs a number of times to repeat.", self.current_line)
             for _ in range(int(count)):
-                self.exec_block(node[2], env)
+                if self._loop_body(node[2], env):
+                    break
 
         elif op == "while":
             guard = 0
             while self.truthy(self.eval(node[1], env)):
-                self.exec_block(node[2], env)
+                if self._loop_body(node[2], env):
+                    break
                 guard += 1
                 if guard > 1_000_000:
                     raise PlainLangError(
@@ -741,7 +754,8 @@ class Interpreter:
             step = 1 if stop >= start else -1
             for i in range(start, stop + step, step):
                 env.assign(var, i)
-                self.exec_block(body, env)
+                if self._loop_body(body, env):
+                    break
 
         elif op == "foreach":
             _, var, seq_e, body = node
@@ -752,7 +766,14 @@ class Interpreter:
                     "Make one with:  set things to list of 1, 2, 3")
             for item in seq:
                 env.assign(var, item)
-                self.exec_block(body, env)
+                if self._loop_body(body, env):
+                    break
+
+        elif op == "break":
+            raise BreakSignal()
+
+        elif op == "continue":
+            raise ContinueSignal()
 
         elif op == "define":
             _, name, params, body = node
@@ -802,6 +823,16 @@ class Interpreter:
             else:
                 raise PlainLangError(
                     "'set item ... of ...' needs a list or a record.", self.current_line)
+
+    def _loop_body(self, body, env):
+        """Run one pass of a loop body. Returns True if 'stop' was requested."""
+        try:
+            self.exec_block(body, env)
+        except ContinueSignal:
+            pass
+        except BreakSignal:
+            return True
+        return False
 
     def call_function(self, name, arg_exprs, env):
         if name not in self.functions:
@@ -1073,6 +1104,12 @@ def run_source(source, on_output=print, on_input=input):
         return True, None
     except PlainLangError as e:
         msg = format_error(source, e)
+        on_output(msg)
+        return False, msg
+    except (BreakSignal, ContinueSignal):
+        word = "stop" if isinstance(sys.exc_info()[1], BreakSignal) else "skip"
+        msg = format_error(source, PlainLangError(
+            f"'{word}' can only be used inside a loop.", None))
         on_output(msg)
         return False, msg
     except RecursionError:

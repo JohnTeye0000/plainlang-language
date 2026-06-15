@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 151 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 169 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -101,7 +101,7 @@ if age is at least 18 then ... otherwise if ... then ... otherwise ... end
 # Comparisons:  is equal to · is greater than · is at least · is not equal to
 # Booleans:     and · or · not
 
-# Loops
+# Loops  (use 'stop' to leave early, 'skip' to jump to the next pass)
 repeat 3 times ... end
 count i from 1 to 5 ... end
 while x is greater than 0 ... end
