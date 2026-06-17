@@ -125,6 +125,18 @@ expect_output("recursion (factorial)",
     'define f with n\nif n is at most 1 then\nreturn 1\nend\n'
     'return n multiplied by f with (n minus 1)\nend\nsay f with 5', ["120"])
 
+# ── first-class functions ──────────────────────────────────────────────────────
+print("First-class functions")
+expect_output("store a function in a variable",
+    'define double with n\nreturn n multiplied by 2\nend\nset op to double\nsay op with 10', ["20"])
+expect_output("pass a function as an argument",
+    'define double with n\nreturn n multiplied by 2\nend\n'
+    'define apply_twice with f and x\nreturn f with (f with x)\nend\nsay apply_twice with double and 5', ["20"])
+expect_output("a function is a value you can display",
+    'define double with n\nreturn n multiplied by 2\nend\nsay double', ["function double"])
+expect_error("calling a non-function variable",
+    'set x to 5\nsay x with 1', "not a function")
+
 # ── built-in helpers ──────────────────────────────────────────────────────────
 print("Built-ins")
 expect_output("uppercase", 'say uppercase of "hi"', ["HI"])

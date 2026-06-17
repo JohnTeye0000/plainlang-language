@@ -656,24 +656,44 @@ class ContinueSignal(Exception):
     """Raised by 'skip' to jump to the next pass of the nearest loop."""
 
 
+_UNSET = object()   # "no such variable" sentinel (distinct from any real value)
+
+
+class PlainFunction:
+    """A function as a first-class value — it can be stored and passed around."""
+    def __init__(self, name, params, body):
+        self.name = name
+        self.params = params
+        self.body = body
+
+
 class Environment:
     def __init__(self, parent=None):
         self.vars = {}
         self.parent = parent
 
-    def get(self, name, line=None):
+    def lookup(self, name):
+        """Return the value, or _UNSET if the name isn't defined (never raises)."""
         env = self
         while env:
             if name in env.vars:
                 return env.vars[name]
             env = env.parent
-        # gather every visible name so we can offer a "did you mean?"
+        return _UNSET
+
+    def visible_names(self):
         names = set()
         env = self
         while env:
             names.update(env.vars.keys())
             env = env.parent
-        raise unknown_variable_error(name, names, line)
+        return names
+
+    def get(self, name, line=None):
+        val = self.lookup(name)
+        if val is _UNSET:
+            raise unknown_variable_error(name, self.visible_names(), line)
+        return val
 
     def assign(self, name, value):
         env = self
@@ -777,7 +797,7 @@ class Interpreter:
 
         elif op == "define":
             _, name, params, body = node
-            self.functions[name] = (params, body)
+            self.functions[name] = PlainFunction(name, params, body)
 
         elif op == "call":
             self.call_function(node[1], node[2], env)
@@ -835,18 +855,43 @@ class Interpreter:
         return False
 
     def call_function(self, name, arg_exprs, env):
-        if name not in self.functions:
-            raise unknown_function_error(name, self.functions.keys(), self.current_line)
-        params, body = self.functions[name]
-        if len(params) != len(arg_exprs):
+        # 'name with args' calls either a defined function or a variable that
+        # holds a function value (first-class functions).
+        fn = self.functions.get(name)
+        if fn is None:
+            val = env.lookup(name)
+            if isinstance(val, PlainFunction):
+                fn = val
+            elif val is not _UNSET:
+                raise PlainLangError(
+                    f"'{name}' is not a function, so it can't be called with values.",
+                    self.current_line)
+            else:
+                raise unknown_function_error(name, self.functions.keys(), self.current_line)
+        if len(fn.params) != len(arg_exprs):
             raise PlainLangError(
-                f"'{name}' expects {len(params)} value(s), "
+                f"'{fn.name}' expects {len(fn.params)} value(s), "
                 f"but got {len(arg_exprs)}.", self.current_line)
         local = Environment(self.globals)
-        for p, a in zip(params, arg_exprs):
+        for p, a in zip(fn.params, arg_exprs):
             local.vars[p] = self.eval(a, env)
         try:
-            self.exec_block(body, local)
+            self.exec_block(fn.body, local)
+        except ReturnSignal as r:
+            return r.value
+        return None
+
+    def call_value(self, fn, args):
+        """Invoke a PlainFunction with already-evaluated argument values."""
+        if len(fn.params) != len(args):
+            raise PlainLangError(
+                f"'{fn.name}' expects {len(fn.params)} value(s), but got {len(args)}.",
+                self.current_line)
+        local = Environment(self.globals)
+        for p, a in zip(fn.params, args):
+            local.vars[p] = a
+        try:
+            self.exec_block(fn.body, local)
         except ReturnSignal as r:
             return r.value
         return None
@@ -857,7 +902,14 @@ class Interpreter:
         if op == "num":  return node[1]
         if op == "str":  return node[1]
         if op == "bool": return node[1]
-        if op == "var":  return env.get(node[1], self.current_line)
+        if op == "var":
+            name = node[1]
+            val = env.lookup(name)
+            if val is not _UNSET:
+                return val
+            if name in self.functions:        # a function used as a value
+                return self.functions[name]
+            raise unknown_variable_error(name, env.visible_names(), self.current_line)
         if op == "neg":  return -self.eval(node[1], env)
 
         if op == "list":
@@ -1019,6 +1071,8 @@ class Interpreter:
         if isinstance(v, dict):
             return "{" + ", ".join(f"{self.to_str(k)}: {self.to_str(val)}"
                                    for k, val in v.items()) + "}"
+        if isinstance(v, PlainFunction):
+            return f"function {v.name}"
         return str(v)
 
     @staticmethod
@@ -1028,6 +1082,7 @@ class Interpreter:
         if isinstance(v, str):            return "some text"
         if isinstance(v, list):           return "a list"
         if isinstance(v, dict):           return "a record"
+        if isinstance(v, PlainFunction):  return "a function"
         return "nothing"
 
 

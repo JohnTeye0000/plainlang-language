@@ -218,8 +218,7 @@ class Analyzer:
         if scope.defines(name):
             return
         if name in self.functions:
-            self.error(f"'{name}' is a function — to use it, call it.", line,
-                       hint=f"Try:  {name} with ...", near=name)
+            return   # a function used as a first-class value — legal
         else:
             self.error(f"I haven't heard of a variable called '{name}' yet.", line,
                        hint=pl._did_you_mean(name, scope.names()) or f"Set it first:  set {name} to ...",
@@ -227,15 +226,18 @@ class Analyzer:
 
     def check_call(self, node, scope, line):
         name, args = node[1], node[2]
-        if name not in self.functions:
+        if name in self.functions:
+            need = len(self.functions[name])
+            if need != len(args):
+                self.error(f"'{name}' expects {need} value(s), but you gave {len(args)}.",
+                           line, near=name)
+        elif scope.defines(name):
+            self.reads.add(name)   # a variable holding a function — arity is dynamic
+        else:
             self.error(f"I don't know a function called '{name}'.", line,
                        hint=pl._did_you_mean(name, self.functions.keys())
                             or f"Define it first:  define {name} ... end",
                        near=name)
-        elif len(self.functions[name]) != len(args):
-            need = len(self.functions[name])
-            self.error(f"'{name}' expects {need} value(s), but you gave {len(args)}.",
-                       line, near=name)
 
 
 def render(source, d):

@@ -73,6 +73,10 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("first-class functions: store, pass, display", () => {
+  const r = out('define double with n\nreturn n multiplied by 2\nend\ndefine apply_twice with f and x\nreturn f with (f with x)\nend\nset op to double\nsay op with 10\nsay apply_twice with double and 5\nsay double');
+  assert.deepStrictEqual(r.output, ["20", "20", "function double"]);
+});
 test("turtle produces drawing segments", () => {
   const r = out("repeat 4 times\nmove forward 100\nturn right 90\nend");
   assert.strictEqual(r.turtle.length, 4);

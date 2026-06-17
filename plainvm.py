@@ -36,6 +36,8 @@ def to_str(v):
         return "[" + ", ".join(to_str(x) for x in v) + "]"
     if isinstance(v, dict):
         return "{" + ", ".join(f"{to_str(k)}: {to_str(val)}" for k, val in v.items()) + "}"
+    if isinstance(v, Function):
+        return f"function {v.name}"
     if v is None:
         return "nothing"
     return str(v)
@@ -57,6 +59,7 @@ def type_name(v):
     if isinstance(v, str):            return "some text"
     if isinstance(v, list):           return "a list"
     if isinstance(v, dict):           return "a record"
+    if isinstance(v, Function):       return "a function"
     return "nothing"
 
 
@@ -449,7 +452,9 @@ class VM:
                 if v is MISS:
                     v = glb.get(arg, MISS)
                     if v is MISS:
-                        raise pl.unknown_variable_error(arg, list(floc) + list(glb), line)
+                        v = functions.get(arg, MISS)   # a function used as a value
+                        if v is MISS:
+                            raise pl.unknown_variable_error(arg, list(floc) + list(glb), line)
                 push(v)
             elif op == "CONST":
                 push(consts[arg])
@@ -480,10 +485,18 @@ class VM:
             elif op == "CALL":
                 name, argc = arg
                 fn = functions.get(name)
-                if fn is None:
-                    raise pl.unknown_function_error(name, functions.keys(), line)
+                if fn is None:                       # maybe a variable holds a function
+                    v = floc.get(name, MISS)
+                    if v is MISS:
+                        v = glb.get(name, MISS)
+                    if isinstance(v, Function):
+                        fn = v
+                    elif v is not MISS:
+                        raise PlainLangError(f"'{name}' is not a function, so it can't be called with values.", line)
+                    else:
+                        raise pl.unknown_function_error(name, functions.keys(), line)
                 if len(fn.params) != argc:
-                    raise PlainLangError(f"'{name}' expects {len(fn.params)} value(s), but got {argc}.", line)
+                    raise PlainLangError(f"'{fn.name}' expects {len(fn.params)} value(s), but got {argc}.", line)
                 if argc:
                     callargs = stack[-argc:]; del stack[-argc:]
                 else:

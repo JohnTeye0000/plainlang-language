@@ -475,14 +475,23 @@
   const breakSignal = () => { const e = new Error("stop"); e[BREAK] = true; return e; };
   const continueSignal = () => { const e = new Error("skip"); e[CONTINUE] = true; return e; };
 
+  const UNSET = Symbol("unset");
   class Environment {
     constructor(parent) { this.vars = Object.create(null); this.parent = parent || null; }
-    get(name, line) {
+    lookup(name) {
       let e = this;
       while (e) { if (name in e.vars) return e.vars[name]; e = e.parent; }
-      const names = [];
-      for (e = this; e; e = e.parent) for (const k in e.vars) names.push(k);
-      throw unknownVariableError(name, names, line);
+      return UNSET;
+    }
+    names() {
+      const out = [];
+      for (let e = this; e; e = e.parent) for (const k in e.vars) out.push(k);
+      return out;
+    }
+    get(name, line) {
+      const v = this.lookup(name);
+      if (v === UNSET) throw unknownVariableError(name, this.names(), line);
+      return v;
     }
     assign(name, value) {
       let e = this;
@@ -581,7 +590,7 @@
       }
       if (op === "break") { throw breakSignal(); }
       if (op === "continue") { throw continueSignal(); }
-      if (op === "define") { this.functions[node[1]] = { params: node[2], body: node[3] }; return; }
+      if (op === "define") { this.functions[node[1]] = { __plfn: true, name: node[1], params: node[2], body: node[3] }; return; }
       if (op === "call") { this.callFunction(node[1], node[2], env); return; }
       if (op === "return") { const v = this.eval(node[1], env); const e = new Error("return"); e[RETURN] = true; e.value = v; throw e; }
       if (op === "add") {
@@ -636,10 +645,16 @@
     }
 
     callFunction(name, argExprs, env) {
-      const fn = this.functions[name];
-      if (!fn) throw unknownFunctionError(name, Object.keys(this.functions), this.currentLine);
+      // 'name with args' calls a defined function or a variable holding one.
+      let fn = this.functions[name];
+      if (!fn) {
+        const v = env.lookup(name);
+        if (v && v.__plfn) fn = v;
+        else if (v !== UNSET) throw new PlainLangError(`'${name}' is not a function, so it can't be called with values.`, this.currentLine);
+        else throw unknownFunctionError(name, Object.keys(this.functions), this.currentLine);
+      }
       if (fn.params.length !== argExprs.length)
-        throw new PlainLangError(`'${name}' expects ${fn.params.length} value(s), but got ${argExprs.length}.`, this.currentLine);
+        throw new PlainLangError(`'${fn.name}' expects ${fn.params.length} value(s), but got ${argExprs.length}.`, this.currentLine);
       const local = new Environment(this.globals);
       for (let k = 0; k < fn.params.length; k++) local.vars[fn.params[k]] = this.eval(argExprs[k], env);
       try { this.execBlock(fn.body, local); }
@@ -652,7 +667,12 @@
       if (op === "num") return node[1];
       if (op === "str") return node[1];
       if (op === "bool") return node[1];
-      if (op === "var") return env.get(node[1], this.currentLine);
+      if (op === "var") {
+        const v = env.lookup(node[1]);
+        if (v !== UNSET) return v;
+        if (node[1] in this.functions) return this.functions[node[1]];   // function as a value
+        throw unknownVariableError(node[1], env.names(), this.currentLine);
+      }
       if (op === "neg") return -this.eval(node[1], env);
       if (op === "list") return node[1].map((e) => this.eval(e, env));
       if (op === "record") {
@@ -743,7 +763,8 @@
   }
 
   // ─── Shared helpers ──────────────────────────────────────────────────────
-  function isDict(v) { return v != null && typeof v === "object" && !Array.isArray(v); }
+  function isPlFn(v) { return v != null && typeof v === "object" && v.__plfn === true; }
+  function isDict(v) { return v != null && typeof v === "object" && !Array.isArray(v) && !isPlFn(v); }
   function truthy(v) {
     if (typeof v === "boolean") return v;
     if (typeof v === "number") return v !== 0;
@@ -759,6 +780,7 @@
   function toStr(v) {
     if (typeof v === "boolean") return v ? "true" : "false";
     if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);
+    if (isPlFn(v)) return `function ${v.name}`;
     if (Array.isArray(v)) return "[" + v.map(toStr).join(", ") + "]";
     if (isDict(v)) return "{" + Object.keys(v).map((k) => `${k}: ${toStr(v[k])}`).join(", ") + "}";
     if (v == null) return "nothing";
@@ -768,6 +790,7 @@
     if (typeof v === "boolean") return "true/false";
     if (typeof v === "number") return "a number";
     if (typeof v === "string") return "some text";
+    if (isPlFn(v)) return "a function";
     if (Array.isArray(v)) return "a list";
     if (isDict(v)) return "a record";
     return "nothing";

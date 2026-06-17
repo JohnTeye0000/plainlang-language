@@ -57,7 +57,8 @@ has("unreachable code", 'define f with n\nreturn n\nsay "after"\nend\nsay f with
 has("stop outside a loop", 'say "x"\nstop', "only be used inside a loop", "error")
 has("skip outside a loop", 'skip', "only be used inside a loop", "error")
 clean("stop inside a loop is fine", 'count i from 1 to 5\nif i is equal to 3 then\nstop\nend\nsay i\nend')
-has("function used as a value", 'define f with n\nreturn n\nend\nsay f', "is a function", "error")
+clean("function used as a first-class value", 'define f with n\nreturn n\nend\nset g to f\nsay g with 3')
+clean("calling a function held in a variable is not flagged", 'define f with n\nreturn n\nend\nset g to f\nsay g with 3')
 
 # ── multi-error reporting: many problems at once ──────────────────────────────
 print("Multi-error reporting")
