@@ -137,6 +137,20 @@ expect_output("a function is a value you can display",
 expect_error("calling a non-function variable",
     'set x to 5\nsay x with 1', "not a function")
 
+# ── map / filter / reduce ──────────────────────────────────────────────────────
+print("Map / filter / reduce")
+_dbl = 'define double with n\nreturn n multiplied by 2\nend\n'
+_big = 'define is_big with n\nreturn n is greater than 3\nend\n'
+_sum = 'define combine with a and b\nreturn a plus b\nend\n'
+expect_output("map", _dbl + 'say map double over (list of 1, 2, 3)', ["[2, 4, 6]"])
+expect_output("filter", _big + 'say filter is_big over (list of 1, 5, 2, 9)', ["[5, 9]"])
+expect_output("reduce", _sum + 'say reduce combine over (list of 1, 2, 3, 4) from 0', ["10"])
+expect_output("map with a stored function",
+    _dbl + 'set f to double\nsay map f over (list of 10, 20)', ["[20, 40]"])
+expect_output("nested map + reduce",
+    _dbl + _sum + 'say reduce combine over (map double over (list of 1, 2, 3)) from 0', ["12"])
+expect_error("map needs a function", 'set x to 5\nsay map x over (list of 1, 2)', "needs a function")
+
 # ── built-in helpers ──────────────────────────────────────────────────────────
 print("Built-ins")
 expect_output("uppercase", 'say uppercase of "hi"', ["HI"])

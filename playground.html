@@ -683,6 +683,24 @@ end
 say "double, twice, on 5 = " plus apply_twice with double and 5
 say "triple, twice, on 2 = " plus apply_twice with triple and 2`,
 
+    "Map, filter, reduce": `# Transform whole lists by passing functions around.
+define double with n
+    return n multiplied by 2
+end
+define is_even with n
+    return n divided by 2 is equal to round of (n divided by 2)
+end
+define combine with a and b
+    return a plus b
+end
+
+set numbers to list of 1, 2, 3, 4, 5, 6
+
+say "doubled:  " plus map double over numbers
+say "evens:    " plus filter is_even over numbers
+say "total:    " plus reduce combine over numbers from 0
+say "sum of evens, doubled: " plus reduce combine over (map double over (filter is_even over numbers)) from 0`,
+
     "FizzBuzz": `count n from 1 to 20
     if n divided by 15 is equal to round of (n divided by 15) then
         say "FizzBuzz"

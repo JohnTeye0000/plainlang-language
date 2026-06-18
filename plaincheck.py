@@ -211,6 +211,11 @@ class Analyzer:
         elif op == "record":
             for k, v in node[1]:
                 self.walk_expr(k, scope, line); self.walk_expr(v, scope, line)
+        elif op in ("map", "filter"):
+            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
+        elif op == "reduce":
+            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
+            self.walk_expr(node[3], scope, line)
         # num / str / bool: nothing to check
 
     def use_var(self, name, scope, line):

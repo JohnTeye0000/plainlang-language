@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 179 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 191 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -134,6 +134,13 @@ define apply_twice with f and x
     return f with (f with x)
 end
 say apply_twice with double and 5
+
+# Higher-order: map / filter / reduce
+define combine with a and b
+    return a plus b
+end
+say map double over (list of 1, 2, 3)              # [2, 4, 6]
+say reduce combine over (list of 1, 2, 3, 4) from 0   # 10
 
 # Built-ins:  length of · uppercase of · round of · square root of · random between 1 and 6
 

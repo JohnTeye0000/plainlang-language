@@ -108,6 +108,7 @@
     "square", "root", "random", "between",
     "record", "as", "keys",
     "stop", "skip",
+    "map", "filter", "reduce", "over",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -445,6 +446,8 @@
         return ["list", items];
       }
       if (this.isKw("record")) return this.recordLiteral();
+      if (this.isKw("map", "filter")) { const kind = this.advance()[1]; const fn = this.comparison(); this.eatKw("over"); return [kind, fn, this.comparison()]; }
+      if (this.isKw("reduce")) { this.advance(); const fn = this.comparison(); this.eatKw("over"); const seq = this.comparison(); this.eatKw("from"); return ["reduce", fn, seq, this.comparison()]; }
       if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
       if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys")) {
         const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
@@ -662,6 +665,21 @@
       return null;
     }
 
+    invoke(fn, args) {
+      // call a function value with already-evaluated arguments (for map/filter/reduce)
+      if (fn.params.length !== args.length)
+        throw new PlainLangError(`'${fn.name}' expects ${fn.params.length} value(s), but got ${args.length}.`, this.currentLine);
+      const local = new Environment(this.globals);
+      for (let k = 0; k < fn.params.length; k++) local.vars[fn.params[k]] = args[k];
+      try { this.execBlock(fn.body, local); }
+      catch (e) { if (e[RETURN]) return e.value; throw e; }
+      return null;
+    }
+    needListFn(fn, seq, name) {
+      if (!isPlFn(fn)) throw new PlainLangError(`'${name}' needs a function.`, this.currentLine);
+      if (!Array.isArray(seq)) throw new PlainLangError(`'${name} ... over ...' needs a list.`, this.currentLine);
+    }
+
     eval(node, env) {
       const op = node[0];
       if (op === "num") return node[1];
@@ -679,6 +697,19 @@
         const d = {};
         for (const [k, v] of node[1]) d[this.eval(k, env)] = this.eval(v, env);
         return d;
+      }
+      if (op === "map" || op === "filter") {
+        const fn = this.eval(node[1], env), seq = this.eval(node[2], env);
+        this.needListFn(fn, seq, op);
+        if (op === "map") return seq.map((x) => this.invoke(fn, [x]));
+        return seq.filter((x) => truthy(this.invoke(fn, [x])));
+      }
+      if (op === "reduce") {
+        const fn = this.eval(node[1], env), seq = this.eval(node[2], env);
+        let acc = this.eval(node[3], env);
+        this.needListFn(fn, seq, "reduce");
+        for (const x of seq) acc = this.invoke(fn, [acc, x]);
+        return acc;
       }
       if (op === "index") {
         const seq = this.eval(node[1], env);
@@ -927,6 +958,9 @@
       if (op === "neg") return `(-${this.expr(node[1])})`;
       if (op === "list") return "[" + node[1].map((e) => this.expr(e)).join(", ") + "]";
       if (op === "record") return "{ " + node[1].map(([k, v]) => `[${this.expr(k)}]: ${this.expr(v)}`).join(", ") + " }";
+      if (op === "map") return `${this.expr(node[2])}.map(${this.expr(node[1])})`;
+      if (op === "filter") return `${this.expr(node[2])}.filter(${this.expr(node[1])})`;
+      if (op === "reduce") return `${this.expr(node[2])}.reduce(${this.expr(node[1])}, ${this.expr(node[3])})`;
       if (op === "index") return `itemOf(${this.expr(node[1])}, ${this.expr(node[2])})`;
       if (op === "binop") return `(${this.expr(node[2])} ${node[1]} ${this.expr(node[3])})`;
       if (op === "cmp") {

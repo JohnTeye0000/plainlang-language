@@ -160,6 +160,7 @@ KEYWORDS = {
     "square", "root", "random", "between",
     "record", "as", "keys",
     "stop", "skip",
+    "map", "filter", "reduce", "over",
 }
 
 
@@ -600,6 +601,18 @@ class Parser:
             return ("list", items)
         if self.is_kw("record"):
             return self.record_literal()
+        if self.is_kw("map", "filter"):
+            kind = self.advance()[1]
+            fn = self.comparison()
+            self.eat_kw("over")
+            return (kind, fn, self.comparison())
+        if self.is_kw("reduce"):
+            self.advance()
+            fn = self.comparison()
+            self.eat_kw("over")
+            seq = self.comparison()
+            self.eat_kw("from")
+            return ("reduce", fn, seq, self.comparison())
         if self.is_kw("item"):
             self.advance()
             index = self.expression()
@@ -881,6 +894,12 @@ class Interpreter:
             return r.value
         return None
 
+    def _need_list_fn(self, fn, seq, name):
+        if not isinstance(fn, PlainFunction):
+            raise PlainLangError(f"'{name}' needs a function.", self.current_line)
+        if not isinstance(seq, list):
+            raise PlainLangError(f"'{name} ... over ...' needs a list.", self.current_line)
+
     def call_value(self, fn, args):
         """Invoke a PlainFunction with already-evaluated argument values."""
         if len(fn.params) != len(args):
@@ -920,6 +939,23 @@ class Interpreter:
             for k, v in node[1]:
                 d[self.eval(k, env)] = self.eval(v, env)
             return d
+
+        if op in ("map", "filter"):
+            fn = self.eval(node[1], env)
+            seq = self.eval(node[2], env)
+            self._need_list_fn(fn, seq, op)
+            if op == "map":
+                return [self.call_value(fn, [x]) for x in seq]
+            return [x for x in seq if self.truthy(self.call_value(fn, [x]))]
+
+        if op == "reduce":
+            fn = self.eval(node[1], env)
+            seq = self.eval(node[2], env)
+            acc = self.eval(node[3], env)
+            self._need_list_fn(fn, seq, "reduce")
+            for x in seq:
+                acc = self.call_value(fn, [acc, x])
+            return acc
 
         if op == "index":
             seq = self.eval(node[1], env)

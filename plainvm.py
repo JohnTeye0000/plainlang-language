@@ -305,6 +305,15 @@ class Compiler:
             self.expr(k); self.expr(v)
         self.emit("BUILD_RECORD", len(node[1]))
 
+    def e_map(self, node):
+        self.expr(node[1]); self.expr(node[2]); self.emit("MAP")
+
+    def e_filter(self, node):
+        self.expr(node[1]); self.expr(node[2]); self.emit("FILTER")
+
+    def e_reduce(self, node):
+        self.expr(node[1]); self.expr(node[2]); self.expr(node[3]); self.emit("REDUCE")
+
     def e_index(self, node):
         self.expr(node[1]); self.expr(node[2]); self.emit("GET_ITEM")
 
@@ -421,21 +430,21 @@ class VM:
         self.steps = 0
 
     def run(self):
-        # The dispatch loop is deliberately flat and hot-path-first: variable
-        # access and arithmetic are inlined (no method calls) and the most
-        # common opcodes are tested earliest. The instruction pointer `ip` and
-        # the current chunk are kept in locals; calls/returns swap them and
-        # save/restore the previous frame via the `frames` list.
+        self._execute(self.program.main.code, self.program.main.consts, self.globals)
+
+    def _execute(self, code, consts, floc):
+        # Runs one chunk to completion and returns its value (None for main).
+        # Re-entrant: map / filter / reduce call this to run a function per item.
+        # The dispatch loop is flat and hot-path-first: variable access and
+        # arithmetic are inlined; `ip` and the current chunk are locals, with a
+        # per-call `frames` stack for nested function calls.
         glb = self.globals
-        stack = self.stack
+        stack = []
         push = stack.append
         pop = stack.pop
         functions = self.program.functions
         MISS = _MISS
         frames = []                 # saved (code, consts, locals, ip) per call
-        code = self.program.main.code
-        consts = self.program.main.consts
-        floc = glb                  # top-level locals ARE the globals
         ip = 0
         steps = 0
         LIMIT = 200_000_000
@@ -506,6 +515,8 @@ class VM:
                 floc = dict(zip(fn.params, callargs)); ip = 0
             elif op == "RETURN":
                 ret = pop()
+                if not frames:          # returning from the base chunk
+                    return ret
                 code, consts, floc, ip = frames.pop()
                 push(ret)
             elif op == "EQ":
@@ -570,6 +581,21 @@ class VM:
                     raise PlainLangError("'set item ... of ...' needs a list or a record.", line)
             elif op == "GET_ITEM":
                 i = pop(); seq = pop(); self.line = line; push(self.get_item(seq, i))
+            elif op == "MAP":
+                seq = pop(); fn = pop(); self.line = line
+                self._need_list_fn(seq, fn, "map", line)
+                push([self._call_value(fn, [x], line) for x in seq])
+            elif op == "FILTER":
+                seq = pop(); fn = pop(); self.line = line
+                self._need_list_fn(seq, fn, "filter", line)
+                push([x for x in seq if truthy(self._call_value(fn, [x], line))])
+            elif op == "REDUCE":
+                start = pop(); seq = pop(); fn = pop(); self.line = line
+                self._need_list_fn(seq, fn, "reduce", line)
+                acc = start
+                for x in seq:
+                    acc = self._call_value(fn, [acc, x], line)
+                push(acc)
             elif op == "BUILTIN":
                 name, argc = arg
                 if argc:
@@ -603,9 +629,21 @@ class VM:
                     raise PlainLangError(f"There is no item {idx} in '{arg}' (it has {len(target)} item(s)).", line)
                 target.pop(idx - 1)
             elif op == "HALT":
-                break
+                return None
             else:
                 raise PlainLangError(f"vm: unknown opcode {op!r}", line)
+
+    def _need_list_fn(self, seq, fn, name, line):
+        if not isinstance(fn, Function):
+            raise PlainLangError(f"'{name}' needs a function.", line)
+        if not isinstance(seq, list):
+            raise PlainLangError(f"'{name} ... over ...' needs a list.", line)
+
+    def _call_value(self, fn, args, line):
+        if len(fn.params) != len(args):
+            raise PlainLangError(
+                f"'{fn.name}' expects {len(fn.params)} value(s), but got {len(args)}.", line)
+        return self._execute(fn.chunk.code, fn.chunk.consts, dict(zip(fn.params, args)))
 
     # — operations (identical semantics to the tree-walker) —
     def arith(self, op, a, b):
