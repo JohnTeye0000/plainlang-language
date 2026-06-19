@@ -109,6 +109,7 @@
     "record", "as", "keys",
     "stop", "skip",
     "map", "filter", "reduce", "over",
+    "split", "join", "trim", "replace", "position", "contains",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -401,6 +402,7 @@
     comparison() {
       const l = this.arith();
       if (this.isKw("is")) { this.advance(); const op = this.compOp(); return ["cmp", op, l, this.arith()]; }
+      if (this.isKw("contains")) { this.advance(); return ["builtin", "contains", [l, this.arith()]]; }
       return l;
     }
     compOp() {
@@ -449,11 +451,15 @@
       if (this.isKw("map", "filter")) { const kind = this.advance()[1]; const fn = this.comparison(); this.eatKw("over"); return [kind, fn, this.comparison()]; }
       if (this.isKw("reduce")) { this.advance(); const fn = this.comparison(); this.eatKw("over"); const seq = this.comparison(); this.eatKw("from"); return ["reduce", fn, seq, this.comparison()]; }
       if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
-      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys")) {
+      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim")) {
         const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
       }
       if (this.isKw("square")) { this.advance(); this.eatKw("root"); this.eatKw("of"); return ["builtin", "sqrt", [this.primary()]]; }
       if (this.isKw("random")) { this.advance(); this.eatKw("between"); const lo = this.arith(); this.eatKw("and"); const hi = this.arith(); return ["builtin", "random", [lo, hi]]; }
+      if (this.isKw("split")) { this.advance(); const t = this.comparison(); this.eatKw("by"); return ["builtin", "split", [t, this.comparison()]]; }
+      if (this.isKw("join")) { this.advance(); const s = this.comparison(); this.eatKw("by"); return ["builtin", "join", [s, this.comparison()]]; }
+      if (this.isKw("replace")) { this.advance(); const o = this.comparison(); this.eatKw("by"); const n = this.comparison(); this.eatKw("in"); return ["builtin", "replace", [o, n, this.comparison()]]; }
+      if (this.isKw("position")) { this.advance(); this.eatKw("of"); const p = this.comparison(); this.eatKw("in"); return ["builtin", "position", [p, this.comparison()]]; }
       if (x[0] === "IDENT") {
         this.advance();
         if (this.isKw("with")) {
@@ -779,6 +785,21 @@
       }
       if (name === "uppercase") return toStr(args[0]).toUpperCase();
       if (name === "lowercase") return toStr(args[0]).toLowerCase();
+      if (name === "trim") return toStr(args[0]).trim();
+      if (name === "split") {
+        const text = toStr(args[0]), sep = toStr(args[1]);
+        return sep === "" ? text.split("") : text.split(sep);
+      }
+      if (name === "join") {
+        if (!Array.isArray(args[0])) throw new PlainLangError("'join' works on a list.", this.currentLine);
+        return args[0].map(toStr).join(toStr(args[1]));
+      }
+      if (name === "replace") return toStr(args[2]).split(toStr(args[0])).join(toStr(args[1]));
+      if (name === "position") return toStr(args[1]).indexOf(toStr(args[0])) + 1;
+      if (name === "contains") {
+        if (Array.isArray(args[0])) return args[0].includes(args[1]);
+        return toStr(args[0]).includes(toStr(args[1]));
+      }
       if (name === "round") return Math.round(args[0]);
       if (name === "absolute") return Math.abs(args[0]);
       if (name === "sqrt") {
@@ -872,6 +893,8 @@
         "function setItemOf(c, k, v) { if (Array.isArray(c)) c[k - 1] = v; else c[k] = v; }");
       if (/\bsizeOf\(/.test(body)) parts.push(
         "const sizeOf = (x) => Array.isArray(x) || typeof x === \"string\" ? x.length : Object.keys(x).length;");
+      if (/\bcontainsOf\(/.test(body)) parts.push(
+        "const containsOf = (c, p) => Array.isArray(c) ? c.includes(p) : String(c).includes(String(p));");
       if (/\bturtle\./.test(body)) parts.push(
         "// 'turtle' would be your drawing library (move the pen across a canvas).");
       return parts.join("\n") + "\n\n";
@@ -978,6 +1001,12 @@
           case "keys":      return `Object.keys(${a[0]})`;
           case "uppercase": return `String(${a[0]}).toUpperCase()`;
           case "lowercase": return `String(${a[0]}).toLowerCase()`;
+          case "trim":      return `String(${a[0]}).trim()`;
+          case "split":     return `String(${a[0]}).split(${a[1]})`;
+          case "join":      return `${a[0]}.map(format).join(${a[1]})`;
+          case "replace":   return `String(${a[2]}).split(${a[0]}).join(${a[1]})`;
+          case "position":  return `(String(${a[1]}).indexOf(${a[0]}) + 1)`;
+          case "contains":  return `containsOf(${a[0]}, ${a[1]})`;
           case "round":     return `Math.round(${a[0]})`;
           case "absolute":  return `Math.abs(${a[0]})`;
           case "sqrt":      return `Math.sqrt(${a[0]})`;

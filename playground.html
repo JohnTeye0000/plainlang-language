@@ -434,7 +434,7 @@
   const KEYWORDS = new Set(("set to say ask into if then otherwise end repeat times while count from for each in " +
     "define with call return list of empty add remove item plus minus multiplied divided by is not greater less " +
     "than equal at least most and or true false length uppercase lowercase round absolute square root random between " +
-    "record as keys stop skip " +
+    "record as keys stop skip map filter reduce over split join trim replace position contains " +
     "move forward backward back turn left right pen up down color wait").split(" "));
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
@@ -700,6 +700,26 @@ say "doubled:  " plus map double over numbers
 say "evens:    " plus filter is_even over numbers
 say "total:    " plus reduce combine over numbers from 0
 say "sum of evens, doubled: " plus reduce combine over (map double over (filter is_even over numbers)) from 0`,
+
+    "Working with text": `# PlainLang has a small text toolbox.
+set sentence to "the quick brown fox"
+
+set words to split sentence by " "
+say "Words:    " plus words
+say "How many: " plus length of words
+say "Shouted:  " plus uppercase of sentence
+say "Joined:   " plus join words by " / "
+say "Swapped:  " plus replace "quick" by "slow" in sentence
+
+if sentence contains "fox" then
+    say "Yes, it mentions a fox (at position " plus (position of "fox" in sentence) plus ")."
+end
+
+# count the long words
+define is_long with word
+    return length of word is greater than 4
+end
+say "Long words: " plus filter is_long over words`,
 
     "FizzBuzz": `count n from 1 to 20
     if n divided by 15 is equal to round of (n divided by 15) then

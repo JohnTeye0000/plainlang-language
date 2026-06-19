@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 191 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 208 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -143,6 +143,14 @@ say map double over (list of 1, 2, 3)              # [2, 4, 6]
 say reduce combine over (list of 1, 2, 3, 4) from 0   # 10
 
 # Built-ins:  length of · uppercase of · round of · square root of · random between 1 and 6
+
+# Text toolbox
+say split "a,b,c" by ","          # [a, b, c]
+say join (list of "a", "b") by "-"  # a-b
+say trim of "  hi  "              # hi
+say replace "o" by "0" in "foo"   # f00
+say position of "b" in "abc"      # 2
+say "hello" contains "ell"        # true
 
 # Turtle graphics
 pen color to "#38bdf8"

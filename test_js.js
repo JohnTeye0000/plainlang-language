@@ -73,6 +73,14 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("text library: split, join, trim, replace, position, contains", () => {
+  assert.deepStrictEqual(out('say split "a,b,c" by ","').output, ["[a, b, c]"]);
+  assert.deepStrictEqual(out('say join (list of "a", "b") by "-"').output, ["a-b"]);
+  assert.deepStrictEqual(out('say trim of "  hi  "').output, ["hi"]);
+  assert.deepStrictEqual(out('say replace "o" by "0" in "foo"').output, ["f00"]);
+  assert.deepStrictEqual(out('say position of "b" in "abc"\nsay position of "z" in "abc"').output, ["2", "0"]);
+  assert.deepStrictEqual(out('say "hello" contains "ell"\nsay (list of 1, 2, 3) contains 2').output, ["true", "true"]);
+});
 test("map / filter / reduce", () => {
   const prelude = 'define double with n\nreturn n multiplied by 2\nend\ndefine big with n\nreturn n is greater than 3\nend\ndefine combine with a and b\nreturn a plus b\nend\n';
   assert.deepStrictEqual(out(prelude + 'say map double over (list of 1, 2, 3)').output, ["[2, 4, 6]"]);

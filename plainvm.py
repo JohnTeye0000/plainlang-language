@@ -701,6 +701,22 @@ class VM:
             raise PlainLangError("'keys of' works on a record.", self.line)
         if name == "uppercase": return to_str(args[0]).upper()
         if name == "lowercase": return to_str(args[0]).lower()
+        if name == "trim":      return to_str(args[0]).strip()
+        if name == "split":
+            text, sep = to_str(args[0]), to_str(args[1])
+            return list(text) if sep == "" else text.split(sep)
+        if name == "join":
+            if not isinstance(args[0], list):
+                raise PlainLangError("'join' works on a list.", self.line)
+            return to_str(args[1]).join(to_str(x) for x in args[0])
+        if name == "replace":
+            return to_str(args[2]).replace(to_str(args[0]), to_str(args[1]))
+        if name == "position":
+            return to_str(args[1]).find(to_str(args[0])) + 1
+        if name == "contains":
+            if isinstance(args[0], list):
+                return args[1] in args[0]
+            return to_str(args[1]) in to_str(args[0])
         if name == "round":     return round(args[0])
         if name == "absolute":  return abs(args[0])
         if name == "sqrt":

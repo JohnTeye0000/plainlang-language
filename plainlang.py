@@ -161,6 +161,7 @@ KEYWORDS = {
     "record", "as", "keys",
     "stop", "skip",
     "map", "filter", "reduce", "over",
+    "split", "join", "trim", "replace", "position", "contains",
 }
 
 
@@ -517,6 +518,9 @@ class Parser:
             op = self._comparison_op()
             right = self.arith()
             return ("cmp", op, left, right)
+        if self.is_kw("contains"):           # "TEXT contains PART" / "LIST contains ITEM"
+            self.advance()
+            return ("builtin", "contains", [left, self.arith()])
         return left
 
     def _comparison_op(self):
@@ -621,13 +625,27 @@ class Parser:
             return ("index", seq, index)
 
         # built-in functions
-        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys"):
+        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim"):
             name = self.advance()[1]
             self.eat_kw("of")
             return ("builtin", name, [self.primary()])
         if self.is_kw("square"):
             self.advance(); self.eat_kw("root"); self.eat_kw("of")
             return ("builtin", "sqrt", [self.primary()])
+        # text helpers
+        if self.is_kw("split"):              # split TEXT by SEP
+            self.advance(); text = self.comparison(); self.eat_kw("by")
+            return ("builtin", "split", [text, self.comparison()])
+        if self.is_kw("join"):               # join LIST by SEP
+            self.advance(); seq = self.comparison(); self.eat_kw("by")
+            return ("builtin", "join", [seq, self.comparison()])
+        if self.is_kw("replace"):            # replace OLD by NEW in TEXT
+            self.advance(); old = self.comparison(); self.eat_kw("by")
+            new = self.comparison(); self.eat_kw("in")
+            return ("builtin", "replace", [old, new, self.comparison()])
+        if self.is_kw("position"):           # position of PART in TEXT
+            self.advance(); self.eat_kw("of"); part = self.comparison(); self.eat_kw("in")
+            return ("builtin", "position", [part, self.comparison()])
         if self.is_kw("random"):
             self.advance(); self.eat_kw("between")
             low = self.arith()
@@ -1063,6 +1081,27 @@ class Interpreter:
             return self.to_str(args[0]).upper()
         if name == "lowercase":
             return self.to_str(args[0]).lower()
+        if name == "trim":
+            return self.to_str(args[0]).strip()
+        if name == "split":
+            text, sep = self.to_str(args[0]), self.to_str(args[1])
+            return list(text) if sep == "" else text.split(sep)
+        if name == "join":
+            seq = args[0]
+            if not isinstance(seq, list):
+                raise PlainLangError("'join' works on a list.", self.current_line)
+            return self.to_str(args[1]).join(self.to_str(x) for x in seq)
+        if name == "replace":
+            old, new, text = self.to_str(args[0]), self.to_str(args[1]), self.to_str(args[2])
+            return text.replace(old, new)
+        if name == "position":
+            part, text = self.to_str(args[0]), self.to_str(args[1])
+            return text.find(part) + 1
+        if name == "contains":
+            container, part = args[0], args[1]
+            if isinstance(container, list):
+                return part in container
+            return self.to_str(part) in self.to_str(container)
         if name == "round":
             return round(args[0])
         if name == "absolute":

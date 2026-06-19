@@ -151,6 +151,22 @@ expect_output("nested map + reduce",
     _dbl + _sum + 'say reduce combine over (map double over (list of 1, 2, 3)) from 0', ["12"])
 expect_error("map needs a function", 'set x to 5\nsay map x over (list of 1, 2)', "needs a function")
 
+# ── text / string library ──────────────────────────────────────────────────────
+print("Text library")
+expect_output("split", 'say split "a,b,c" by ","', ["[a, b, c]"])
+expect_output("split into characters", 'say split "hi" by ""', ["[h, i]"])
+expect_output("join", 'say join (list of "a", "b", "c") by "-"', ["a-b-c"])
+expect_output("split then join round-trips",
+    'set w to split "the quick fox" by " "\nsay join w by " "', ["the quick fox"])
+expect_output("trim", 'say "[" plus trim of "  hi  " plus "]"', ["[hi]"])
+expect_output("replace", 'say replace "o" by "0" in "foo boo"', ["f00 b00"])
+expect_output("position found", 'say position of "world" in "hello world"', ["7"])
+expect_output("position not found", 'say position of "z" in "hello"', ["0"])
+expect_output("contains text (true)", 'say "hello" contains "ell"', ["true"])
+expect_output("contains text (false)", 'say "hello" contains "xyz"', ["false"])
+expect_output("contains list item", 'say (list of 1, 2, 3) contains 2', ["true"])
+expect_output("length of text", 'say length of "hello"', ["5"])
+
 # ── built-in helpers ──────────────────────────────────────────────────────────
 print("Built-ins")
 expect_output("uppercase", 'say uppercase of "hi"', ["HI"])
