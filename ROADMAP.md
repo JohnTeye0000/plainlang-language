@@ -34,7 +34,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] `break` and `continue` for loops — *as `stop` / `skip`, across all engines*
 - [x] First-class functions: functions stored in variables, passed as arguments — *done across all engines, cross-validated*
 - [x] Higher-order built-ins: `map`, `filter`, `reduce` expressed in PlainLang's style — *done across all engines, cross-validated; transpiles to native JS array methods*
-- [ ] Pattern matching (`match ... when ...`)
+- [x] Pattern matching (`match ... when ...`) — *done across all engines, cross-validated; transpiles to a JS switch*
 - [x] A **text/string library**: split, join, trim, replace, position, contains — *done across all engines, cross-validated*
 - [ ] More standard library: numbers/math helpers, list helpers, dates
 - [ ] Modules / imports — multi-file programs

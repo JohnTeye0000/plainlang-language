@@ -167,6 +167,19 @@ expect_output("contains text (false)", 'say "hello" contains "xyz"', ["false"])
 expect_output("contains list item", 'say (list of 1, 2, 3) contains 2', ["true"])
 expect_output("length of text", 'say length of "hello"', ["5"])
 
+# ── pattern matching ───────────────────────────────────────────────────────────
+print("Pattern matching")
+_m = ('match n\nwhen 1 then\nsay "one"\nwhen 2 then\nsay "two"\notherwise\nsay "many"\nend')
+expect_output("match first case", 'set n to 1\n' + _m, ["one"])
+expect_output("match middle case", 'set n to 2\n' + _m, ["two"])
+expect_output("match otherwise", 'set n to 9\n' + _m, ["many"])
+expect_output("match on text",
+    'set light to "green"\nmatch light\nwhen "red" then\nsay "stop"\nwhen "green" then\nsay "go"\nend', ["go"])
+expect_output("match no case, no otherwise (nothing happens)",
+    'set n to 5\nmatch n\nwhen 1 then\nsay "one"\nend\nsay "done"', ["done"])
+expect_output("match inside a loop",
+    'count n from 1 to 3\nmatch n\nwhen 2 then\nsay "even"\notherwise\nsay "odd"\nend\nend', ["odd", "even", "odd"])
+
 # ── built-in helpers ──────────────────────────────────────────────────────────
 print("Built-ins")
 expect_output("uppercase", 'say uppercase of "hi"', ["HI"])

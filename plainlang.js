@@ -110,6 +110,7 @@
     "stop", "skip",
     "map", "filter", "reduce", "over",
     "split", "join", "trim", "replace", "position", "contains",
+    "match", "when",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -172,7 +173,7 @@
   }
 
   // ─── Parser ──────────────────────────────────────────────────────────────
-  const BLOCK_ENDERS = new Set(["end", "otherwise"]);
+  const BLOCK_ENDERS = new Set(["end", "otherwise", "when"]);
   const STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
     "for", "define", "call", "return", "add", "remove", "move", "turn", "pen"];
   const VALUE_START_KW = new Set(["true", "false", "empty", "list", "item", "length",
@@ -231,6 +232,7 @@
       if (this.isKw("say")) return this.sayStmt();
       if (this.isKw("ask")) return this.askStmt();
       if (this.isKw("if")) return this.ifStmt();
+      if (this.isKw("match")) return this.matchStmt();
       if (this.isKw("repeat")) return this.repeatStmt();
       if (this.isKw("while")) return this.whileStmt();
       if (this.isKw("count")) return this.countStmt();
@@ -287,6 +289,21 @@
     sayStmt() { this.eatKw("say"); return ["say", this.expression()]; }
     askStmt() { this.eatKw("ask"); const p = this.expression(); this.eatKw("into"); const name = this.eat("IDENT", "a variable name")[1]; return ["ask", p, name]; }
 
+    matchStmt() {
+      this.eatKw("match");
+      const subject = this.expression();
+      const cases = [];
+      while (this.isKw("when")) {
+        this.advance();
+        const value = this.expression();
+        this.eatKw("then");
+        cases.push([value, this.block()]);
+      }
+      let elseBlock = null;
+      if (this.isKw("otherwise")) { this.advance(); elseBlock = this.block(); }
+      this.eatKw("end");
+      return ["match", subject, cases, elseBlock];
+    }
     ifStmt() {
       this.eatKw("if");
       const branches = [];
@@ -572,6 +589,14 @@
       if (op === "if") {
         for (const [cond, body] of node[1]) if (truthy(this.eval(cond, env))) { this.execBlock(body, env); return; }
         if (node[2]) this.execBlock(node[2], env);
+        return;
+      }
+      if (op === "match") {
+        const val = this.eval(node[1], env);
+        for (const [valueExpr, body] of node[2]) {
+          if (val === this.eval(valueExpr, env)) { this.execBlock(body, env); return; }
+        }
+        if (node[3]) this.execBlock(node[3], env);
         return;
       }
       if (op === "repeat") {
@@ -908,6 +933,7 @@
           const op = s[0];
           if (op === "set" || op === "ask") names.add(s[1]);
           else if (op === "if") { for (const [, b] of s[1]) walk(b[1]); if (s[2]) walk(s[2][1]); }
+          else if (op === "match") { for (const [, b] of s[2]) walk(b[1]); if (s[3]) walk(s[3][1]); }
           else if (op === "repeat") walk(s[2][1]);
           else if (op === "while") walk(s[2][1]);
           else if (op === "count") walk(s[4][1]);
@@ -966,6 +992,20 @@
             this.indent++; this.stmtList(body); this.indent--;
           });
           if (elseBlock) { this.emit("} else {"); this.indent++; this.stmtList(elseBlock); this.indent--; }
+          this.emit("}");
+          break;
+        }
+        case "match": {
+          const [subject, cases, elseBlock] = [node[1], node[2], node[3]];
+          this.emit(`switch (${this.expr(subject)}) {`);
+          this.indent++;
+          for (const [value, body] of cases) {
+            this.emit(`case ${this.expr(value)}: {`);
+            this.indent++; this.stmtList(body); this.emit("break;"); this.indent--;
+            this.emit("}");
+          }
+          if (elseBlock) { this.emit("default: {"); this.indent++; this.stmtList(elseBlock); this.indent--; this.emit("}"); }
+          this.indent--;
           this.emit("}");
           break;
         }

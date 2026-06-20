@@ -73,6 +73,13 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("pattern matching", () => {
+  const m = 'match n\nwhen 1 then\nsay "one"\nwhen 2 then\nsay "two"\notherwise\nsay "many"\nend';
+  assert.deepStrictEqual(out('set n to 1\n' + m).output, ["one"]);
+  assert.deepStrictEqual(out('set n to 2\n' + m).output, ["two"]);
+  assert.deepStrictEqual(out('set n to 7\n' + m).output, ["many"]);
+  assert.deepStrictEqual(out('set light to "green"\nmatch light\nwhen "red" then\nsay "stop"\nwhen "green" then\nsay "go"\nend').output, ["go"]);
+});
 test("text library: split, join, trim, replace, position, contains", () => {
   assert.deepStrictEqual(out('say split "a,b,c" by ","').output, ["[a, b, c]"]);
   assert.deepStrictEqual(out('say join (list of "a", "b") by "-"').output, ["a-b"]);

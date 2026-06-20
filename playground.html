@@ -434,7 +434,7 @@
   const KEYWORDS = new Set(("set to say ask into if then otherwise end repeat times while count from for each in " +
     "define with call return list of empty add remove item plus minus multiplied divided by is not greater less " +
     "than equal at least most and or true false length uppercase lowercase round absolute square root random between " +
-    "record as keys stop skip map filter reduce over split join trim replace position contains " +
+    "record as keys stop skip map filter reduce over split join trim replace position contains match when " +
     "move forward backward back turn left right pen up down color wait").split(" "));
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
@@ -720,6 +720,30 @@ define is_long with word
     return length of word is greater than 4
 end
 say "Long words: " plus filter is_long over words`,
+
+    "Pattern matching": `# 'match' picks a branch by comparing a value.
+count roll from 1 to 6
+    match roll
+        when 1 then
+            say roll plus " — you lose a turn"
+        when 6 then
+            say roll plus " — you win!"
+        otherwise
+            say roll plus " — move " plus roll plus " spaces"
+    end
+end
+
+set grade to "B"
+match grade
+    when "A" then
+        say "Excellent!"
+    when "B" then
+        say "Good job."
+    when "C" then
+        say "You passed."
+    otherwise
+        say "Let's review together."
+end`,
 
     "FizzBuzz": `count n from 1 to 20
     if n divided by 15 is equal to round of (n divided by 15) then

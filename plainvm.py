@@ -176,6 +176,23 @@ class Compiler:
         for j in end_jumps:
             self.patch(j, self.here())
 
+    def s_match(self, node):
+        # evaluate the subject once into a temp, then compare against each case
+        _, subject, cases, else_block = node
+        subj = self.newtmp("match")
+        self.expr(subject); self.emit("STORE", subj)
+        end_jumps = []
+        for value, body in cases:
+            self.emit("LOAD", subj); self.expr(value); self.emit("EQ")
+            j_next = self.emit("JUMP_IF_FALSE", None)
+            self.block(body)
+            end_jumps.append(self.emit("JUMP", None))
+            self.patch(j_next, self.here())
+        if else_block:
+            self.block(else_block)
+        for j in end_jumps:
+            self.patch(j, self.here())
+
     # — stop / skip (break / continue) —
     # Each loop pushes a context; 'stop' and 'skip' emit JUMPs whose targets are
     # backpatched once the loop's end and continue-points are known. This is how
@@ -394,6 +411,11 @@ def compile_program(source):
                         find_defines(b)
                     if n[2]:
                         find_defines(n[2])
+                elif n[0] == "match":
+                    for _, b in n[2]:
+                        find_defines(b)
+                    if n[3]:
+                        find_defines(n[3])
                 elif n[0] == "repeat":  find_defines(n[2])
                 elif n[0] == "while":   find_defines(n[2])
                 elif n[0] == "count":   find_defines(n[4])

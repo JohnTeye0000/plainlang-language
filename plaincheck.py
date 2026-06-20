@@ -82,6 +82,11 @@ class Analyzer:
                     self.collect_functions(b)
                 if n[2]:
                     self.collect_functions(n[2])
+            elif op == "match":
+                for _, b in n[2]:
+                    self.collect_functions(b)
+                if n[3]:
+                    self.collect_functions(n[3])
             elif op in ("repeat", "while"):
                 self.collect_functions(n[2])
             elif op == "count":
@@ -105,6 +110,11 @@ class Analyzer:
                     names |= self.collect_assigned(b)
                 if n[2]:
                     names |= self.collect_assigned(n[2])
+            elif op == "match":
+                for _, b in n[2]:
+                    names |= self.collect_assigned(b)
+                if n[3]:
+                    names |= self.collect_assigned(n[3])
             elif op in ("repeat", "while"):
                 names |= self.collect_assigned(n[2])
         return names
@@ -159,6 +169,12 @@ class Analyzer:
                 self.walk_expr(cond, scope, line); self.walk_block(body, scope)
             if n[2]:
                 self.walk_block(n[2], scope)
+        elif op == "match":
+            self.walk_expr(n[1], scope, line)
+            for value, body in n[2]:
+                self.walk_expr(value, scope, line); self.walk_block(body, scope)
+            if n[3]:
+                self.walk_block(n[3], scope)
         elif op == "while":
             self.walk_expr(n[1], scope, line); self.walk_loop(n[2], scope)
         elif op == "repeat":

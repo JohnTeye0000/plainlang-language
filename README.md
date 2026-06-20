@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 208 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 218 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -97,6 +97,13 @@ say (2 plus 3) multiplied by 4
 
 # Decisions
 if age is at least 18 then ... otherwise if ... then ... otherwise ... end
+
+# Pattern matching
+match grade
+    when "A" then say "Excellent!"
+    when "B" then say "Good job."
+    otherwise   say "Let's review."
+end
 
 # Comparisons:  is equal to · is greater than · is at least · is not equal to
 # Booleans:     and · or · not

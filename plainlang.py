@@ -162,6 +162,7 @@ KEYWORDS = {
     "stop", "skip",
     "map", "filter", "reduce", "over",
     "split", "join", "trim", "replace", "position", "contains",
+    "match", "when",
 }
 
 
@@ -203,7 +204,7 @@ def tokenize(source):
 # Statements are wrapped as ("@", line, node) so runtime errors know where
 # they happened.
 
-BLOCK_ENDERS = {"end", "otherwise"}
+BLOCK_ENDERS = {"end", "otherwise", "when"}
 
 
 class Parser:
@@ -287,6 +288,7 @@ class Parser:
         if self.is_kw("say"):     return self.say_stmt()
         if self.is_kw("ask"):     return self.ask_stmt()
         if self.is_kw("if"):      return self.if_stmt()
+        if self.is_kw("match"):   return self.match_stmt()
         if self.is_kw("repeat"):  return self.repeat_stmt()
         if self.is_kw("while"):   return self.while_stmt()
         if self.is_kw("count"):   return self.count_stmt()
@@ -380,6 +382,23 @@ class Parser:
         body = self.block()
         self.eat_kw("end")
         return ("repeat", count, body)
+
+    def match_stmt(self):
+        # match X  when V then ...  when V then ...  otherwise ...  end
+        self.eat_kw("match")
+        subject = self.expression()
+        cases = []
+        while self.is_kw("when"):
+            self.advance()
+            value = self.expression()
+            self.eat_kw("then")
+            cases.append((value, self.block()))
+        else_block = None
+        if self.is_kw("otherwise"):
+            self.advance()
+            else_block = self.block()
+        self.eat_kw("end")
+        return ("match", subject, cases, else_block)
 
     def while_stmt(self):
         self.eat_kw("while")
@@ -772,6 +791,16 @@ class Interpreter:
             branches, else_block = node[1], node[2]
             for cond, body in branches:
                 if self.truthy(self.eval(cond, env)):
+                    self.exec_block(body, env)
+                    return
+            if else_block:
+                self.exec_block(else_block, env)
+
+        elif op == "match":
+            _, subject, cases, else_block = node
+            val = self.eval(subject, env)
+            for value_expr, body in cases:
+                if val == self.eval(value_expr, env):
                     self.exec_block(body, env)
                     return
             if else_block:
