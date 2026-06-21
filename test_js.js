@@ -73,6 +73,15 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("numbers & lists toolbox", () => {
+  assert.deepStrictEqual(out('say sum of (list of 5, 2, 8, 1)').output, ["16"]);
+  assert.deepStrictEqual(out('say average of (list of 2, 4, 6)').output, ["4"]);
+  assert.deepStrictEqual(out('say smallest of (list of 5, 2, 8)\nsay largest of (list of 5, 2, 8)').output, ["2", "8"]);
+  assert.deepStrictEqual(out('say sorted of (list of 10, 2, 33, 4)').output, ["[2, 4, 10, 33]"]);
+  assert.deepStrictEqual(out('say sorted of (list of "pear", "apple", "fig")').output, ["[apple, fig, pear]"]);
+  assert.deepStrictEqual(out('say reverse of (list of 1, 2, 3)\nsay reverse of "hi"').output, ["[3, 2, 1]", "ih"]);
+  assert.deepStrictEqual(out('say remainder of 17 and 5\nsay remainder of 10 and 5').output, ["2", "0"]);
+});
 test("pattern matching", () => {
   const m = 'match n\nwhen 1 then\nsay "one"\nwhen 2 then\nsay "two"\notherwise\nsay "many"\nend';
   assert.deepStrictEqual(out('set n to 1\n' + m).output, ["one"]);

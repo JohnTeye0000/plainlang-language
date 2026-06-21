@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 218 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 236 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -150,6 +150,13 @@ say map double over (list of 1, 2, 3)              # [2, 4, 6]
 say reduce combine over (list of 1, 2, 3, 4) from 0   # 10
 
 # Built-ins:  length of · uppercase of · round of · square root of · random between 1 and 6
+
+# Numbers & lists toolbox
+say sum of (list of 5, 2, 8)       # 15
+say average of (list of 2, 4, 6)   # 4
+say smallest of (list of 5, 2, 8)  # 2
+say sorted of (list of 3, 1, 2)    # [1, 2, 3]
+say remainder of 17 and 5          # 2
 
 # Text toolbox
 say split "a,b,c" by ","          # [a, b, c]

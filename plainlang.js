@@ -111,6 +111,7 @@
     "map", "filter", "reduce", "over",
     "split", "join", "trim", "replace", "position", "contains",
     "match", "when",
+    "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted", "remainder",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -468,10 +469,12 @@
       if (this.isKw("map", "filter")) { const kind = this.advance()[1]; const fn = this.comparison(); this.eatKw("over"); return [kind, fn, this.comparison()]; }
       if (this.isKw("reduce")) { this.advance(); const fn = this.comparison(); this.eatKw("over"); const seq = this.comparison(); this.eatKw("from"); return ["reduce", fn, seq, this.comparison()]; }
       if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
-      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim")) {
+      if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim",
+                    "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted")) {
         const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
       }
       if (this.isKw("square")) { this.advance(); this.eatKw("root"); this.eatKw("of"); return ["builtin", "sqrt", [this.primary()]]; }
+      if (this.isKw("remainder")) { this.advance(); this.eatKw("of"); const a = this.arith(); this.eatKw("and"); return ["builtin", "remainder", [a, this.arith()]]; }
       if (this.isKw("random")) { this.advance(); this.eatKw("between"); const lo = this.arith(); this.eatKw("and"); const hi = this.arith(); return ["builtin", "random", [lo, hi]]; }
       if (this.isKw("split")) { this.advance(); const t = this.comparison(); this.eatKw("by"); return ["builtin", "split", [t, this.comparison()]]; }
       if (this.isKw("join")) { this.advance(); const s = this.comparison(); this.eatKw("by"); return ["builtin", "join", [s, this.comparison()]]; }
@@ -836,6 +839,41 @@
         const a = Math.min(lo, hi), b = Math.max(lo, hi);
         return a + Math.floor(this.rng() * (b - a + 1));
       }
+      // — numbers & lists toolbox —
+      if (["sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted"].includes(name)) {
+        const v = args[0];
+        if (name === "reverse") {
+          if (typeof v === "string") return v.split("").reverse().join("");
+          this.needList(v, name); return [...v].reverse();
+        }
+        this.needList(v, name);
+        if (name === "sum" || name === "average") {
+          for (const x of v) if (typeof x !== "number") throw new PlainLangError(`'${name} of' needs a list of numbers.`, this.currentLine);
+          const total = v.reduce((a, b) => a + b, 0);
+          if (name === "sum") return total;
+          if (v.length === 0) throw new PlainLangError("I can't take the average of an empty list.", this.currentLine);
+          return total / v.length;
+        }
+        if (v.length === 0) throw new PlainLangError(`I can't take the ${name} of an empty list.`, this.currentLine);
+        if (name === "smallest") return v.reduce((a, b) => (b < a ? b : a));
+        if (name === "largest") return v.reduce((a, b) => (b > a ? b : a));
+        if (name === "first") return v[0];
+        if (name === "last") return v[v.length - 1];
+        if (name === "sorted") {
+          const allNum = v.every((x) => typeof x === "number");
+          const allStr = v.every((x) => typeof x === "string");
+          if (!allNum && !allStr) throw new PlainLangError("I can only sort a list of all numbers or all text.", this.currentLine);
+          return allNum ? [...v].sort((a, b) => a - b) : [...v].sort();
+        }
+      }
+      if (name === "remainder") {
+        const a = Math.trunc(args[0]), b = Math.trunc(args[1]);
+        if (b === 0) throw new PlainLangError("You can't take a remainder when dividing by zero.", this.currentLine);
+        return a - b * Math.floor(a / b);   // floored remainder, matches Python's %
+      }
+    }
+    needList(v, name) {
+      if (!Array.isArray(v)) throw new PlainLangError(`'${name} of' needs a list.`, this.currentLine);
     }
   }
 
@@ -1051,6 +1089,15 @@
           case "absolute":  return `Math.abs(${a[0]})`;
           case "sqrt":      return `Math.sqrt(${a[0]})`;
           case "random":    return `randomBetween(${a[0]}, ${a[1]})`;
+          case "sum":       return `${a[0]}.reduce((x, y) => x + y, 0)`;
+          case "average":   return `(${a[0]}.reduce((x, y) => x + y, 0) / ${a[0]}.length)`;
+          case "smallest":  return `${a[0]}.reduce((x, y) => (y < x ? y : x))`;
+          case "largest":   return `${a[0]}.reduce((x, y) => (y > x ? y : x))`;
+          case "first":     return `${a[0]}[0]`;
+          case "last":      return `${a[0]}[${a[0]}.length - 1]`;
+          case "reverse":   return `[...${a[0]}].reverse()`;
+          case "sorted":    return `[...${a[0]}].sort((x, y) => x - y)`;
+          case "remainder": return `(${a[0]} % ${a[1]})`;
         }
       }
       return "/* ? */";

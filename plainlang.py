@@ -163,6 +163,8 @@ KEYWORDS = {
     "map", "filter", "reduce", "over",
     "split", "join", "trim", "replace", "position", "contains",
     "match", "when",
+    "sum", "average", "smallest", "largest", "first", "last",
+    "reverse", "sorted", "remainder",
 }
 
 
@@ -643,14 +645,19 @@ class Parser:
             seq = self.primary()
             return ("index", seq, index)
 
-        # built-in functions
-        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim"):
+        # built-in functions (single argument:  NAME of X)
+        if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim",
+                      "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted"):
             name = self.advance()[1]
             self.eat_kw("of")
             return ("builtin", name, [self.primary()])
         if self.is_kw("square"):
             self.advance(); self.eat_kw("root"); self.eat_kw("of")
             return ("builtin", "sqrt", [self.primary()])
+        if self.is_kw("remainder"):          # remainder of A and B
+            self.advance(); self.eat_kw("of")
+            a = self.arith(); self.eat_kw("and")
+            return ("builtin", "remainder", [a, self.arith()])
         # text helpers
         if self.is_kw("split"):              # split TEXT by SEP
             self.advance(); text = self.comparison(); self.eat_kw("by")
@@ -1145,6 +1152,44 @@ class Interpreter:
         if name == "random":
             low, high = int(args[0]), int(args[1])
             return random.randint(min(low, high), max(low, high))
+        # — numbers & lists toolbox —
+        if name in ("sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted"):
+            v = args[0]
+            if name == "reverse":
+                if isinstance(v, str):
+                    return v[::-1]
+                self._need_list(v, name); return list(reversed(v))
+            self._need_list(v, name)
+            if name in ("sum", "average"):
+                for x in v:
+                    if not isinstance(x, (int, float)) or isinstance(x, bool):
+                        raise PlainLangError(f"'{name} of' needs a list of numbers.", self.current_line)
+                if name == "sum":
+                    return sum(v)
+                if not v:
+                    raise PlainLangError("I can't take the average of an empty list.", self.current_line)
+                r = sum(v) / len(v)
+                return int(r) if r == int(r) else r
+            if not v:
+                raise PlainLangError(f"I can't take the {name} of an empty list.", self.current_line)
+            if name == "smallest": return min(v)
+            if name == "largest":  return max(v)
+            if name == "first":    return v[0]
+            if name == "last":     return v[-1]
+            if name == "sorted":
+                try:
+                    return sorted(v)
+                except TypeError:
+                    raise PlainLangError("I can only sort a list of all numbers or all text.", self.current_line)
+        if name == "remainder":
+            a, b = int(args[0]), int(args[1])
+            if b == 0:
+                raise PlainLangError("You can't take a remainder when dividing by zero.", self.current_line)
+            return a % b
+
+    def _need_list(self, v, name):
+        if not isinstance(v, list):
+            raise PlainLangError(f"'{name} of' needs a list.", self.current_line)
 
     # — helpers —
     def truthy(self, v):

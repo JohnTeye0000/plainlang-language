@@ -180,6 +180,22 @@ expect_output("match no case, no otherwise (nothing happens)",
 expect_output("match inside a loop",
     'count n from 1 to 3\nmatch n\nwhen 2 then\nsay "even"\notherwise\nsay "odd"\nend\nend', ["odd", "even", "odd"])
 
+# ── numbers & lists toolbox ────────────────────────────────────────────────────
+print("Numbers & lists toolbox")
+expect_output("sum of", 'say sum of (list of 5, 2, 8, 1)', ["16"])
+expect_output("average of (exact)", 'say average of (list of 2, 4, 6)', ["4"])
+expect_output("smallest / largest", 'say smallest of (list of 5, 2, 8)\nsay largest of (list of 5, 2, 8)', ["2", "8"])
+expect_output("first / last", 'say first of (list of 5, 2, 8)\nsay last of (list of 5, 2, 8)', ["5", "8"])
+expect_output("sorted numbers", 'say sorted of (list of 10, 2, 33, 4)', ["[2, 4, 10, 33]"])
+expect_output("sorted text", 'say sorted of (list of "pear", "apple", "fig")', ["[apple, fig, pear]"])
+expect_output("reverse a list", 'say reverse of (list of 1, 2, 3)', ["[3, 2, 1]"])
+expect_output("reverse text", 'say reverse of "hello"', ["olleh"])
+expect_output("remainder", 'say remainder of 17 and 5', ["2"])
+expect_output("remainder for divisibility", 'say remainder of 10 and 5', ["0"])
+expect_error("sum needs numbers", 'say sum of (list of "a", "b")', "needs a list of numbers")
+expect_error("first of empty", 'say first of (empty list)', "empty list")
+expect_error("remainder by zero", 'say remainder of 5 and 0', "dividing by zero")
+
 # ── built-in helpers ──────────────────────────────────────────────────────────
 print("Built-ins")
 expect_output("uppercase", 'say uppercase of "hi"', ["HI"])

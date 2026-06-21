@@ -435,6 +435,7 @@
     "define with call return list of empty add remove item plus minus multiplied divided by is not greater less " +
     "than equal at least most and or true false length uppercase lowercase round absolute square root random between " +
     "record as keys stop skip map filter reduce over split join trim replace position contains match when " +
+    "sum average smallest largest first last reverse sorted remainder " +
     "move forward backward back turn left right pen up down color wait").split(" "));
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
@@ -743,6 +744,31 @@ match grade
         say "You passed."
     otherwise
         say "Let's review together."
+end`,
+
+    "Numbers & lists toolbox": `# A toolbox for working with lists of numbers.
+set scores to list of 88, 72, 95, 60, 100, 84
+
+say "Scores:   " plus scores
+say "How many: " plus length of scores
+say "Total:    " plus sum of scores
+say "Average:  " plus average of scores
+say "Lowest:   " plus smallest of scores
+say "Highest:  " plus largest of scores
+say "Ranked:   " plus sorted of scores
+
+# 'remainder' makes a clean FizzBuzz
+say ""
+count n from 1 to 15
+    if remainder of n and 15 is equal to 0 then
+        say "FizzBuzz"
+    otherwise if remainder of n and 3 is equal to 0 then
+        say "Fizz"
+    otherwise if remainder of n and 5 is equal to 0 then
+        say "Buzz"
+    otherwise
+        say n
+    end
 end`,
 
     "FizzBuzz": `count n from 1 to 20

@@ -36,7 +36,9 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] Higher-order built-ins: `map`, `filter`, `reduce` expressed in PlainLang's style — *done across all engines, cross-validated; transpiles to native JS array methods*
 - [x] Pattern matching (`match ... when ...`) — *done across all engines, cross-validated; transpiles to a JS switch*
 - [x] A **text/string library**: split, join, trim, replace, position, contains — *done across all engines, cross-validated*
-- [ ] More standard library: numbers/math helpers, list helpers, dates
+- [x] Numbers & lists toolbox: sum, average, smallest, largest, first, last, reverse, sorted, remainder — *done across all engines, cross-validated*
+- [ ] More standard library: dates, more math
+- [ ] Modules / multi-file (CLI-focused — browser has no filesystem)
 - [ ] Modules / imports — multi-file programs
 - [ ] Release **v0.2**
 

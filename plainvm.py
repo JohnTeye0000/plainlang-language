@@ -749,6 +749,44 @@ class VM:
             lo, hi = int(args[0]), int(args[1])
             lo, hi = min(lo, hi), max(lo, hi)
             return lo + int(self.rng() * (hi - lo + 1))
+        # — numbers & lists toolbox —
+        if name in ("sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted"):
+            v = args[0]
+            if name == "reverse":
+                if isinstance(v, str):
+                    return v[::-1]
+                self._need_list(v, name); return list(reversed(v))
+            self._need_list(v, name)
+            if name in ("sum", "average"):
+                for x in v:
+                    if not isinstance(x, (int, float)) or isinstance(x, bool):
+                        raise PlainLangError(f"'{name} of' needs a list of numbers.", self.line)
+                if name == "sum":
+                    return sum(v)
+                if not v:
+                    raise PlainLangError("I can't take the average of an empty list.", self.line)
+                r = sum(v) / len(v)
+                return int(r) if r == int(r) else r
+            if not v:
+                raise PlainLangError(f"I can't take the {name} of an empty list.", self.line)
+            if name == "smallest": return min(v)
+            if name == "largest":  return max(v)
+            if name == "first":    return v[0]
+            if name == "last":     return v[-1]
+            if name == "sorted":
+                try:
+                    return sorted(v)
+                except TypeError:
+                    raise PlainLangError("I can only sort a list of all numbers or all text.", self.line)
+        if name == "remainder":
+            a, b = int(args[0]), int(args[1])
+            if b == 0:
+                raise PlainLangError("You can't take a remainder when dividing by zero.", self.line)
+            return a % b
+
+    def _need_list(self, v, name):
+        if not isinstance(v, list):
+            raise PlainLangError(f"'{name} of' needs a list.", self.line)
 
     def coerce_input(self, raw):
         try:
