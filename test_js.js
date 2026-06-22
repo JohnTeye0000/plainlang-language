@@ -73,6 +73,13 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("float formatting matches the Python engine", () => {
+  // both engines round to 10 decimals — these strings are asserted identically
+  // in test_plainlang.py, proving cross-engine consistency
+  assert.deepStrictEqual(out("say 10 divided by 3").output, ["3.3333333333"]);
+  assert.deepStrictEqual(out("say average of (list of 2, 4, 5)").output, ["3.6666666667"]);
+  assert.deepStrictEqual(out("say 7 divided by 2").output, ["3.5"]);
+});
 test("numbers & lists toolbox", () => {
   assert.deepStrictEqual(out('say sum of (list of 5, 2, 8, 1)').output, ["16"]);
   assert.deepStrictEqual(out('say average of (list of 2, 4, 6)').output, ["4"]);

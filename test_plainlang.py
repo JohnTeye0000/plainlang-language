@@ -50,6 +50,14 @@ expect_output("subtraction & division", 'say 10 minus 4\nsay 12 divided by 3', [
 expect_output("division keeps fractions", 'say 7 divided by 2', ["3.5"])
 expect_output("unary minus", 'say minus 5 plus 8', ["3"])
 expect_output("int formatting (no .0)", 'say 4 multiplied by 0.5 plus 8', ["10"])
+# floats round to 10 decimals so output is identical to the JavaScript engine
+expect_output("non-terminating decimal", 'say 10 divided by 3', ["3.3333333333"])
+expect_output("repeating decimal from average", 'say average of (list of 2, 4, 5)', ["3.6666666667"])
+
+# ── cross-engine consistency ────────────────────────────────────────────────────
+print("Cross-engine consistency")
+expect_error("turtle word reserved as a name", 'set color to 1', "expected a variable name")
+expect_error("turtle statement explained at the CLI", 'move forward 100', "web playground")
 
 # ── comparisons & booleans ────────────────────────────────────────────────────
 print("Comparisons & booleans")

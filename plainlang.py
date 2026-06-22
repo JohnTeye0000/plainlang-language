@@ -165,6 +165,10 @@ KEYWORDS = {
     "match", "when",
     "sum", "average", "smallest", "largest", "first", "last",
     "reverse", "sorted", "remainder",
+    # turtle vocabulary — reserved everywhere so identifiers behave the same in
+    # every engine, even though turtle drawing only runs in the web playground.
+    "move", "forward", "backward", "back", "turn", "left", "right",
+    "pen", "up", "down", "color", "wait",
 }
 
 
@@ -302,6 +306,11 @@ class Parser:
         if self.is_kw("remove"):  return self.remove_stmt()
         if self.is_kw("stop"):    self.advance(); return ("break",)
         if self.is_kw("skip"):    self.advance(); return ("continue",)
+        if self.is_kw("move", "turn", "pen", "wait"):
+            t = self.peek(); col, length = self._span(t)
+            raise PlainLangError(
+                "Turtle drawing only works in the web playground, not at the command line.",
+                t[2], "Try the playground for 'move', 'turn', and 'pen'.", col=col, length=length)
         if self.kind() == "IDENT":
             return self.call_stmt()  # bare function call, e.g. greet with "Bob"
         t = self.peek()
@@ -1213,8 +1222,9 @@ class Interpreter:
     def to_str(self, v):
         if isinstance(v, bool):
             return "true" if v else "false"
-        if isinstance(v, float) and v == int(v):
-            return str(int(v))
+        if isinstance(v, float):
+            # round to 10 decimals so output matches the JavaScript engine exactly
+            return str(int(v)) if v == int(v) else str(round(v * 1e10) / 1e10)
         if isinstance(v, list):
             return "[" + ", ".join(self.to_str(x) for x in v) + "]"
         if isinstance(v, dict):

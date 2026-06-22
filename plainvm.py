@@ -30,8 +30,9 @@ from plainlang import PlainLangError
 def to_str(v):
     if isinstance(v, bool):
         return "true" if v else "false"
-    if isinstance(v, float) and v == int(v):
-        return str(int(v))
+    if isinstance(v, float):
+        # round to 10 decimals so output matches the JavaScript engine exactly
+        return str(int(v)) if v == int(v) else str(round(v * 1e10) / 1e10)
     if isinstance(v, list):
         return "[" + ", ".join(to_str(x) for x in v) + "]"
     if isinstance(v, dict):
