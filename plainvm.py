@@ -16,6 +16,7 @@ Usage:
     python plainvm.py --dis program.plang      # show the compiled bytecode
     python plainvm.py --compare program.plang  # run BOTH engines, check they agree
     python plainvm.py --bench                  # benchmark VM vs tree-walker
+    python plainvm.py --optimize program.plang # how much the optimizer removes
 """
 
 import sys
@@ -387,9 +388,107 @@ class Compiler:
         self.emit("CALL", (name, len(args)))
 
 
-def compile_program(source):
+# ─── Optimizer: constant folding ──────────────────────────────────────────────
+# A semantics-preserving pass over the syntax tree that pre-computes expressions
+# whose operands are all literals, e.g.  (2 plus 3) multiplied by 4  ->  20.
+# It only folds operations it can prove are valid (so 5/0 and "a" minus 1 are
+# left for the runtime to report), and never folds lists (they're mutable).
+
+_LIT = ("num", "str", "bool")
+
+
+def _is_num(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def _fold_binop(opc, l, r):
+    if l[0] not in _LIT or r[0] not in _LIT:
+        return None
+    a, b = l[1], r[1]
+    if opc == "+":
+        if _is_num(a) and _is_num(b):
+            return ("num", a + b)
+        if (isinstance(a, str) or isinstance(b, str)) and not isinstance(a, bool) and not isinstance(b, bool):
+            return ("str", to_str(a) + to_str(b))
+        return None
+    if opc in ("-", "*"):
+        if _is_num(a) and _is_num(b):
+            return ("num", a - b if opc == "-" else a * b)
+        return None
+    if opc == "/":
+        if _is_num(a) and _is_num(b) and b != 0:
+            res = a / b
+            return ("num", int(res) if res == int(res) else res)
+        return None
+    return None
+
+
+def _const_cmp(opc, a, b):
+    try:
+        return {"==": a == b, "!=": a != b, ">": a > b,
+                "<": a < b, ">=": a >= b, "<=": a <= b}[opc]
+    except TypeError:
+        return None
+
+
+def fold(node):
+    op = node[0]
+    # — structure & statements: recurse so inner expressions get folded —
+    if op == "@":       return ("@", node[1], fold(node[2]))
+    if op == "block":   return ("block", [fold(s) for s in node[1]])
+    if op == "set":     return ("set", node[1], fold(node[2]))
+    if op == "say":     return ("say", fold(node[1]))
+    if op == "ask":     return ("ask", fold(node[1]), node[2])
+    if op == "return":  return ("return", fold(node[1]))
+    if op == "if":      return ("if", [(fold(c), fold(b)) for c, b in node[1]],
+                                fold(node[2]) if node[2] else None)
+    if op == "match":   return ("match", fold(node[1]), [(fold(v), fold(b)) for v, b in node[2]],
+                                fold(node[3]) if node[3] else None)
+    if op == "repeat":  return ("repeat", fold(node[1]), fold(node[2]))
+    if op == "while":   return ("while", fold(node[1]), fold(node[2]))
+    if op == "count":   return ("count", node[1], fold(node[2]), fold(node[3]), fold(node[4]))
+    if op == "foreach": return ("foreach", node[1], fold(node[2]), fold(node[3]))
+    if op == "define":  return ("define", node[1], node[2], fold(node[3]))
+    if op == "call":    return ("call", node[1], [fold(a) for a in node[2]])
+    if op == "add":     return ("add", fold(node[1]), node[2])
+    if op == "remove":  return ("remove", fold(node[1]), node[2])
+    if op == "setindex": return ("setindex", fold(node[1]), fold(node[2]), fold(node[3]))
+    # — expressions —
+    if op == "neg":
+        inner = fold(node[1])
+        return ("num", -inner[1]) if inner[0] == "num" else ("neg", inner)
+    if op == "not":
+        inner = fold(node[1])
+        return ("bool", not inner[1]) if inner[0] == "bool" else ("not", inner)
+    if op == "list":    return ("list", [fold(e) for e in node[1]])
+    if op == "record":  return ("record", [(fold(k), fold(v)) for k, v in node[1]])
+    if op == "index":   return ("index", fold(node[1]), fold(node[2]))
+    if op in ("map", "filter"): return (op, fold(node[1]), fold(node[2]))
+    if op == "reduce":  return ("reduce", fold(node[1]), fold(node[2]), fold(node[3]))
+    if op == "builtin": return ("builtin", node[1], [fold(a) for a in node[2]])
+    if op == "binop":
+        l, r = fold(node[2]), fold(node[3])
+        return _fold_binop(node[1], l, r) or ("binop", node[1], l, r)
+    if op == "cmp":
+        l, r = fold(node[2]), fold(node[3])
+        if l[0] in _LIT and r[0] in _LIT:
+            res = _const_cmp(node[1], l[1], r[1])
+            if res is not None:
+                return ("bool", res)
+        return ("cmp", node[1], l, r)
+    if op in ("and", "or"):
+        l, r = fold(node[1]), fold(node[2])
+        if l[0] == "bool" and r[0] == "bool":
+            return ("bool", (l[1] and r[1]) if op == "and" else (l[1] or r[1]))
+        return (op, l, r)
+    return node   # num / str / bool / var, and anything unhandled — left as-is
+
+
+def compile_program(source, optimize=True):
     tokens = pl.tokenize(source)
     tree = pl.Parser(tokens).parse()
+    if optimize:
+        tree = fold(tree)   # constant-folding optimization pass
 
     # hoist every function definition and compile each into its own chunk
     functions = {}
@@ -877,6 +976,23 @@ def _compare(path):
     return same
 
 
+def _instruction_count(program):
+    return len(program.main.code) + sum(len(fn.chunk.code) for fn in program.functions.values())
+
+
+def _optimize_report(path):
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    raw = _instruction_count(compile_program(source, optimize=False))
+    opt = _instruction_count(compile_program(source, optimize=True))
+    saved = raw - opt
+    pct = (saved / raw * 100) if raw else 0
+    print("Constant-folding optimizer")
+    print(f"  unoptimized : {raw:5d} instructions")
+    print(f"  optimized   : {opt:5d} instructions")
+    print(f"  removed     : {saved:5d}  ({pct:.0f}% smaller)")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args:
@@ -888,6 +1004,8 @@ if __name__ == "__main__":
             print(disassemble(compile_program(f.read())))
     elif args[0] == "--compare":
         sys.exit(0 if _compare(args[1]) else 1)
+    elif args[0] == "--optimize":
+        _optimize_report(args[1])
     else:
         try:
             with open(args[0], encoding="utf-8") as f:

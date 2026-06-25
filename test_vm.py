@@ -11,6 +11,12 @@ import plainlang as pl
 import plainvm as vm
 
 
+def _vm_out(source):
+    out = []
+    vm.run_source(source, on_output=out.append, rng=lambda: 0.5)
+    return out
+
+
 def both(source, inputs=None):
     inputs = list(inputs or [])
     def make_input(box):
@@ -120,6 +126,34 @@ ok_dis = "CONST" in dis and "JUMP" in dis and "PRINT" in dis
 print(f"  {'✓' if ok_dis else '✗'} disassembler emits bytecode")
 if not ok_dis: FAIL += 1
 else: PASS += 1
+
+# ── constant-folding optimizer ────────────────────────────────────────────────
+print("Optimizer (constant folding)")
+
+def opt_check(name, cond, detail=""):
+    global PASS, FAIL
+    if cond: PASS += 1; print(f"  ✓ {name}")
+    else: FAIL += 1; print(f"  ✗ {name}   {detail}")
+
+def count(src, optimize):
+    p = vm.compile_program(src, optimize=optimize)
+    return len(p.main.code) + sum(len(f.chunk.code) for f in p.functions.values())
+
+# 'say (2 plus 3) multiplied by 4' should fold to a single CONST + PRINT (+HALT)
+opt_check("folds nested arithmetic to one constant",
+          count("say (2 plus 3) multiplied by 4", True) < count("say (2 plus 3) multiplied by 4", False))
+opt_check("folds a comparison",
+          count("if 5 is greater than 3 then\nsay 1\nend", True) < count("if 5 is greater than 3 then\nsay 1\nend", False))
+opt_check("folding preserves output",
+          vm.compile_program("say (2 plus 3) multiplied by 4") is not None
+          and _vm_out("say (2 plus 3) multiplied by 4") == ["20"])
+opt_check("does NOT fold division by zero (still errors at runtime)",
+          "divide by zero" in "\n".join(_vm_out("say 5 divided by 0")))
+opt_check("does NOT fold an invalid type op (still errors at runtime)",
+          "only works with numbers" in "\n".join(_vm_out('say "a" minus 1')))
+opt_check("optimized and unoptimized give the same output",
+          _vm_out("set t to 0\ncount i from 1 to 5\nset t to t plus (i multiplied by 2)\nend\nsay t")
+          == ["30"])
 
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys

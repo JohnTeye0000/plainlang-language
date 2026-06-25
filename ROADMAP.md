@@ -47,7 +47,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 Deepen the back end into something a compilers course would recognize:
 
 - [ ] An **optional/gradual type checker** with friendly type errors
-- [ ] Optimizer passes: constant folding, peephole, dead-code elimination (show bytecode shrink)
+- [x] Optimizer pass: **constant folding** — pre-computes literal expressions; `--optimize` reports the shrink; cross-validated to preserve output. *(peephole / dead-code elimination still to come)*
 - [ ] Parser **error recovery** → report many syntax errors at once
 - [ ] **Source maps** linking bytecode back to lines
 - [ ] A native backend: compile to **WebAssembly** (or C)
