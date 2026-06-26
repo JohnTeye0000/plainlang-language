@@ -59,6 +59,9 @@ has("skip outside a loop", 'skip', "only be used inside a loop", "error")
 clean("stop inside a loop is fine", 'count i from 1 to 5\nif i is equal to 3 then\nstop\nend\nsay i\nend')
 clean("function used as a first-class value", 'define f with n\nreturn n\nend\nset g to f\nsay g with 3')
 clean("map/filter/reduce reference functions", 'define double with n\nreturn n multiplied by 2\nend\nset xs to list of 1, 2, 3\nsay map double over xs')
+has("undefined variable inside string interpolation",
+    'set score to 1\nsay "you got {scor}"', "haven't heard of a variable", "error")
+clean("interpolation of a defined variable is fine", 'set name to "Al"\nsay "Hi {name}"')
 clean("calling a function held in a variable is not flagged", 'define f with n\nreturn n\nend\nset g to f\nsay g with 3')
 
 # ── multi-error reporting: many problems at once ──────────────────────────────

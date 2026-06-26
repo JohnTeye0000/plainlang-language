@@ -722,6 +722,21 @@ define is_long with word
 end
 say "Long words: " plus filter is_long over words`,
 
+    "String interpolation": `# Put a value straight into text with {curly braces} —
+# no more long chains of 'plus'.
+set name to "Ada"
+set score to 92
+
+say "Hi {name}! Your score is {score}."
+say "Next time, aim for {score plus 5}."
+
+set items to list of "apples", "pears", "figs"
+count i from 1 to length of items
+    say "{i}. {item i of items}"
+end
+
+say "For a real brace, use {{ and }}."`,
+
     "Pattern matching": `# 'match' picks a branch by comparing a value.
 count roll from 1 to 6
     match roll

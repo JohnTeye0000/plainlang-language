@@ -431,17 +431,43 @@ def _const_cmp(opc, a, b):
         return None
 
 
+def _terminates(stmt):
+    inner = stmt[2] if stmt[0] == "@" else stmt
+    return inner[0] in ("return", "break", "continue")
+
+
 def fold(node):
     op = node[0]
     # — structure & statements: recurse so inner expressions get folded —
     if op == "@":       return ("@", node[1], fold(node[2]))
-    if op == "block":   return ("block", [fold(s) for s in node[1]])
+    if op == "block":
+        # fold each statement; drop anything after one that always exits the
+        # block (return / stop / skip) — that code is unreachable.
+        out = []
+        for s in node[1]:
+            fs = fold(s)
+            out.append(fs)
+            if _terminates(fs):
+                break
+        return ("block", out)
     if op == "set":     return ("set", node[1], fold(node[2]))
     if op == "say":     return ("say", fold(node[1]))
     if op == "ask":     return ("ask", fold(node[1]), node[2])
     if op == "return":  return ("return", fold(node[1]))
-    if op == "if":      return ("if", [(fold(c), fold(b)) for c, b in node[1]],
-                                fold(node[2]) if node[2] else None)
+    if op == "if":
+        # dead-branch elimination: drop 'when false' branches, and once a branch
+        # condition is constant true, the rest (and the else) can never run.
+        new_branches = []
+        new_else = fold(node[2]) if node[2] else None
+        for c, b in node[1]:
+            fc, fb = fold(c), fold(b)
+            if fc == ("bool", False):
+                continue                     # this branch can never run
+            if fc == ("bool", True):
+                new_else = fb                # always runs if reached; rest is dead
+                break
+            new_branches.append((fc, fb))
+        return ("if", new_branches, new_else)
     if op == "match":   return ("match", fold(node[1]), [(fold(v), fold(b)) for v, b in node[2]],
                                 fold(node[3]) if node[3] else None)
     if op == "repeat":  return ("repeat", fold(node[1]), fold(node[2]))

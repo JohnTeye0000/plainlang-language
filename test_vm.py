@@ -87,6 +87,9 @@ PROGRAMS = {
     "stdlib: lists": 'set xs to list of 10, 2, 33\nsay sorted of xs\nsay reverse of xs\nsay first of xs\nsay last of xs',
     "stdlib: remainder & fizzbuzz-ish": 'count n from 1 to 6\nif remainder of n and 3 is equal to 0 then\nsay "fizz"\notherwise\nsay n\nend\nend',
     "stdlib: errors": 'say first of (empty list)',
+    "interpolation: vars & exprs": 'set name to "Al"\nset n to 10\nset xs to list of 7, 8, 9\nsay "Hi {name}, {n multiplied by 2}, {item 2 of xs}"',
+    "interpolation: escaped braces": 'say "use {{name}} for a literal"',
+    "interpolation: error in braces": 'say "hi {missing}"',
     "for each sum": 'set xs to list of 4, 8, 15, 16\nset t to 0\nfor each n in xs\nset t to t plus n\nend\nsay t',
     "function + return": 'define double with n\nreturn n multiplied by 2\nend\nsay double with 21',
     "function as action": 'define greet with who\nsay "Hi " plus who\nend\ncall greet with "Al"',
@@ -154,6 +157,18 @@ opt_check("does NOT fold an invalid type op (still errors at runtime)",
 opt_check("optimized and unoptimized give the same output",
           _vm_out("set t to 0\ncount i from 1 to 5\nset t to t plus (i multiplied by 2)\nend\nsay t")
           == ["30"])
+
+# dead-code elimination
+opt_check("drops a constant-false branch",
+          count('if false then\nsay "a"\notherwise\nsay "b"\nend', True)
+          < count('if false then\nsay "a"\notherwise\nsay "b"\nend', False)
+          and _vm_out('if false then\nsay "a"\notherwise\nsay "b"\nend') == ["b"])
+opt_check("resolves a constant-true condition",
+          _vm_out('if 2 plus 2 is equal to 4 then\nsay "yes"\notherwise\nsay "no"\nend') == ["yes"])
+opt_check("strips unreachable code after a return",
+          count('define f with n\nreturn n\nsay "dead"\nend\nsay f with 3', True)
+          < count('define f with n\nreturn n\nsay "dead"\nend\nsay f with 3', False)
+          and _vm_out('define f with n\nreturn n\nsay "dead"\nend\nsay f with 3') == ["3"])
 
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys

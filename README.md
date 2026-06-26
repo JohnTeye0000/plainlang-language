@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 247 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 266 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 

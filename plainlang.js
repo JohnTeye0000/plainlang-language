@@ -447,10 +447,39 @@
       return l;
     }
     factor() { if (this.isKw("minus")) { this.advance(); return ["neg", this.factor()]; } return this.primary(); }
+    interpolate(text, line) {
+      // "Hi {name}!"  ->  "" + "Hi " + name + "!"   ({{ }} are literal braces)
+      if (text.indexOf("{") < 0 && text.indexOf("}") < 0) return ["str", text];
+      const parts = [];
+      let buf = "", i = 0;
+      while (i < text.length) {
+        const c = text[i];
+        if (c === "{" && text[i + 1] === "{") { buf += "{"; i += 2; continue; }
+        if (c === "}" && text[i + 1] === "}") { buf += "}"; i += 2; continue; }
+        if (c === "{") {
+          if (buf) { parts.push(["str", buf]); buf = ""; }
+          const j = text.indexOf("}", i + 1);
+          if (j < 0) throw new PlainLangError("This text has a '{' with no matching '}'.", line, "Use {{ if you meant a real curly brace.");
+          const exprSrc = text.slice(i + 1, j).trim();
+          if (!exprSrc) throw new PlainLangError("There's an empty {} in this text.", line, "Put a variable or value between the braces.");
+          let node;
+          try { node = new Parser(tokenize(exprSrc)).expression(); }
+          catch (e) { throw new PlainLangError(`I couldn't understand '{${exprSrc}}': ${e.plMessage || e.message}`, line); }
+          parts.push(node);
+          i = j + 1;
+          continue;
+        }
+        buf += c; i += 1;
+      }
+      if (buf) parts.push(["str", buf]);
+      let result = ["str", ""];
+      for (const p of parts) result = ["binop", "+", result, p];
+      return result;
+    }
     primary() {
       const x = this.peek();
       if (x[0] === "NUMBER") { this.advance(); return ["num", x[1]]; }
-      if (x[0] === "STRING") { this.advance(); return ["str", x[1]]; }
+      if (x[0] === "STRING") { const tok = this.advance(); return this.interpolate(tok[1], tok[2]); }
       if (x[0] === "LPAREN") { this.advance(); const e = this.expression(); this.eat("RPAREN", "a closing ')'"); return e; }
       if (this.isKw("true")) { this.advance(); return ["bool", true]; }
       if (this.isKw("false")) { this.advance(); return ["bool", false]; }

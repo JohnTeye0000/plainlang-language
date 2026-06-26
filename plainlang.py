@@ -603,13 +603,54 @@ class Parser:
             return ("neg", self.factor())
         return self.primary()
 
+    def _interpolate(self, text, line):
+        # Turn  "Hi {name}, you scored {score}"  into a concatenation of the
+        # literal pieces and the embedded expressions. Use {{ and }} for a
+        # literal brace. Desugars to ("binop","+",...) so every engine, the
+        # analyzer, and the transpiler handle it with no extra work.
+        if "{" not in text and "}" not in text:
+            return ("str", text)
+        parts, buf, i, n = [], "", 0, len(text)
+        while i < n:
+            c = text[i]
+            if c == "{" and i + 1 < n and text[i + 1] == "{":
+                buf += "{"; i += 2; continue
+            if c == "}" and i + 1 < n and text[i + 1] == "}":
+                buf += "}"; i += 2; continue
+            if c == "{":
+                if buf:
+                    parts.append(("str", buf)); buf = ""
+                j = text.find("}", i + 1)
+                if j == -1:
+                    raise PlainLangError("This text has a '{' with no matching '}'.", line,
+                                         "Use {{ if you meant a real curly brace.")
+                expr_src = text[i + 1:j].strip()
+                if not expr_src:
+                    raise PlainLangError("There's an empty {} in this text.", line,
+                                         "Put a variable or value between the braces.")
+                try:
+                    node = Parser(tokenize(expr_src)).expression()
+                except PlainLangError as e:
+                    raise PlainLangError(f"I couldn't understand '{{{expr_src}}}': {e.message}", line)
+                parts.append(node)
+                i = j + 1
+                continue
+            buf += c; i += 1
+        if buf:
+            parts.append(("str", buf))
+        result = ("str", "")          # forces the whole chain to be text
+        for p in parts:
+            result = ("binop", "+", result, p)
+        return result
+
     def primary(self):
         t = self.peek()
 
         if t[0] == "NUMBER":
             self.advance(); return ("num", t[1])
         if t[0] == "STRING":
-            self.advance(); return ("str", t[1])
+            tok = self.advance()
+            return self._interpolate(tok[1], tok[2])
         if t[0] == "LPAREN":
             self.advance()
             inner = self.expression()

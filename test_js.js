@@ -73,6 +73,13 @@ test("records: missing key gives a suggestion", () => {
   const r = out('set p to record with "name" as "Al"\nsay item "naem" of p');
   assert.ok(/Did you mean 'name'\?/.test(r.error), r.error);
 });
+test("string interpolation", () => {
+  assert.deepStrictEqual(out('set name to "Al"\nsay "Hi {name}!"').output, ["Hi Al!"]);
+  assert.deepStrictEqual(out('set n to 10\nsay "double is {n multiplied by 2}"').output, ["double is 20"]);
+  assert.deepStrictEqual(out('set xs to list of 7, 8, 9\nsay "second: {item 2 of xs}"').output, ["second: 8"]);
+  assert.deepStrictEqual(out('say "a {{ and a }}"').output, ["a { and a }"]);
+  assert.ok(/haven't heard of a variable/.test(out('say "hi {missing}"').error));
+});
 test("float formatting matches the Python engine", () => {
   // both engines round to 10 decimals — these strings are asserted identically
   // in test_plainlang.py, proving cross-engine consistency

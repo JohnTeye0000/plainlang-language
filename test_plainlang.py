@@ -54,6 +54,19 @@ expect_output("int formatting (no .0)", 'say 4 multiplied by 0.5 plus 8', ["10"]
 expect_output("non-terminating decimal", 'say 10 divided by 3', ["3.3333333333"])
 expect_output("repeating decimal from average", 'say average of (list of 2, 4, 5)', ["3.6666666667"])
 
+# ── string interpolation ────────────────────────────────────────────────────────
+print("String interpolation")
+expect_output("interpolate a variable", 'set name to "Al"\nsay "Hi {name}!"', ["Hi Al!"])
+expect_output("interpolate several", 'set a to 3\nset b to 4\nsay "{a} and {b}"', ["3 and 4"])
+expect_output("interpolate an expression", 'set n to 10\nsay "double is {n multiplied by 2}"', ["double is 20"])
+expect_output("interpolate a list item", 'set xs to list of 7, 8, 9\nsay "second: {item 2 of xs}"', ["second: 8"])
+expect_output("no braces is a plain string", 'say "nothing here"', ["nothing here"])
+expect_output("escaped braces", 'say "a {{ and a }}"', ["a { and a }"])
+expect_output("text around the value", 'set x to 5\nsay "[{x}]"', ["[5]"])
+expect_error("unmatched brace", 'say "oops {name"', "no matching")
+expect_error("empty braces", 'say "oops {}"', "empty")
+expect_error("undefined var inside braces", 'say "hi {missing}"', "haven't heard of a variable")
+
 # ── cross-engine consistency ────────────────────────────────────────────────────
 print("Cross-engine consistency")
 expect_error("turtle word reserved as a name", 'set color to 1', "expected a variable name")
