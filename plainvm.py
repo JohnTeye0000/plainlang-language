@@ -510,6 +510,46 @@ def fold(node):
     return node   # num / str / bool / var, and anything unhandled — left as-is
 
 
+# ─── Optimizer: peephole (bytecode-level jump cleanup) ─────────────────────────
+
+_JUMP_OPS = ("JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE")
+
+
+def _thread_jumps(code):
+    """A jump landing on an unconditional JUMP is retargeted to its destination."""
+    changed = False
+    for i, instr in enumerate(code):
+        op, arg, line = instr
+        if op in _JUMP_OPS:
+            t, seen = arg, set()
+            while 0 <= t < len(code) and code[t][0] == "JUMP" and t not in seen:
+                seen.add(t)
+                t = code[t][1]
+            if t != arg:
+                code[i] = (op, t, line)
+                changed = True
+    return changed
+
+
+def _drop_noop_jump(code):
+    """Remove one 'JUMP to the next instruction' and retarget everything around it."""
+    for i, instr in enumerate(code):
+        if instr[0] == "JUMP" and instr[1] == i + 1:
+            del code[i]
+            for j, (op, arg, line) in enumerate(code):
+                if op in _JUMP_OPS and arg > i:     # addresses after i shifted down by one
+                    code[j] = (op, arg - 1, line)
+            return True
+    return False
+
+
+def peephole(code):
+    """Tighten a chunk's bytecode: thread jumps, then drop redundant ones."""
+    _thread_jumps(code)
+    while _drop_noop_jump(code):
+        _thread_jumps(code)
+
+
 def compile_program(source, optimize=True):
     tokens = pl.tokenize(source)
     tree = pl.Parser(tokens).parse()
@@ -552,10 +592,16 @@ def compile_program(source, optimize=True):
     main.block(tree)
     main.emit("HALT")
 
+    program = Program(main.chunk, functions)
+    all_chunks = [program.main] + [fn.chunk for fn in functions.values()]
+
+    if optimize:
+        for chunk in all_chunks:
+            peephole(chunk.code)   # bytecode-level jump cleanup
+
     # Freeze every chunk's instructions to tuples (faster to unpack in the VM
     # loop than lists, and immutable once all jump targets are patched).
-    program = Program(main.chunk, functions)
-    for chunk in [program.main] + [fn.chunk for fn in functions.values()]:
+    for chunk in all_chunks:
         chunk.code = [tuple(instr) for instr in chunk.code]
     return program
 

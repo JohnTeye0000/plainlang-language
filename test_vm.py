@@ -170,6 +170,24 @@ opt_check("strips unreachable code after a return",
           < count('define f with n\nreturn n\nsay "dead"\nend\nsay f with 3', False)
           and _vm_out('define f with n\nreturn n\nsay "dead"\nend\nsay f with 3') == ["3"])
 
+# peephole (jump cleanup)
+def _no_noop_jumps(src):
+    p = vm.compile_program(src, optimize=True)
+    for chunk in [p.main] + [f.chunk for f in p.functions.values()]:
+        for i, instr in enumerate(chunk.code):
+            if instr[0] == "JUMP" and instr[1] == i + 1:
+                return False
+    return True
+
+opt_check("peephole leaves no redundant 'jump to next'",
+          _no_noop_jumps('if true then\nsay "x"\nend\ncount n from 1 to 3\nsay n\nend'))
+opt_check("peephole keeps loops + conditionals correct",
+          _vm_out('count n from 1 to 4\nif remainder of n and 2 is equal to 0 then\nsay "even"\notherwise\nsay "odd"\nend\nend')
+          == ["odd", "even", "odd", "even"])
+opt_check("peephole shrinks a single-branch if",
+          count('if true then\nsay "yes"\nend\nsay "done"', True)
+          < count('if true then\nsay "yes"\nend\nsay "done"', False))
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)

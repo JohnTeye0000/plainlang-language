@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 266 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 269 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -228,12 +228,14 @@ $ python plainvm.py --bench                    # VM vs tree-walker timing
 $ python plainvm.py --optimize program.plang  # how much the optimizer removes
 ```
 
-The compiler runs a **constant-folding optimizer** before emitting bytecode: any
-expression whose operands are all literals is pre-computed, so
-`say (2 plus 3) multiplied by 4` compiles straight to `CONST 20; PRINT`. It only folds
-operations it can prove are valid — `5 divided by 0` and `"a" minus 1` are left for the
-runtime to report — and the cross-validation suite proves the optimization never changes a
-program's output.
+The compiler runs an **optimizer** before emitting bytecode — three passes:
+*constant folding* (any expression whose operands are all literals is pre-computed, so
+`say (2 plus 3) multiplied by 4` compiles straight to `CONST 20; PRINT`), *dead-code
+elimination* (branches that can never run, and statements after a `return`/`stop`/`skip`,
+are dropped), and a *peephole* pass (redundant jumps are threaded and removed). It only
+optimizes transformations it can prove are valid — `5 divided by 0` and `"a" minus 1` are
+left for the runtime to report — and the cross-validation suite proves the optimizer never
+changes a program's output.
 
 A `count` loop, for example, lowers to primitive jumps and a single direction-agnostic
 loop test `(i - stop) * step <= 0`:
