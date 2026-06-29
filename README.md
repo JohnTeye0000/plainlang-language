@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 269 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 281 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -32,7 +32,7 @@ run one step at a time.
 | **`plainlang.js`** | The language engine in JavaScript: tokenizer → parser → interpreter, **plus a compiler that translates PlainLang to readable JavaScript**. |
 | **`plainlang.py`** | A second, independent implementation: a tree-walking command-line interpreter and REPL. |
 | **`plainvm.py`** | A **third** backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
-| **`plaincheck.py`** | A static analyzer — a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code). |
+| **`plaincheck.py`** | A static analyzer + **gradual type checker** — a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code, and type errors like text-minus-a-number). |
 | **`test_plainlang.py`** | A 48-case test suite covering the language and its error messages. |
 | **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
@@ -282,6 +282,13 @@ $ python plaincheck.py program.plang
 
 It is tuned for **precision** — correct programs are never flagged — because a teaching
 tool that cries wolf is worse than none.
+
+The same pass does **gradual type checking**: it infers a type for each variable (from
+literals and consistent assignments) and reports operations that must fail, while leaving
+anything it can't determine as *unknown* and never complaining about it. So
+`set age to "twelve"` followed by `if age is at least 18` is caught before running —
+*"I can't compare some text with a number"* — but a function parameter whose type isn't
+known is never second-guessed.
 
 ---
 

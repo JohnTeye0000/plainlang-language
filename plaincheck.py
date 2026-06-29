@@ -26,10 +26,63 @@ def _unwrap(stmt):
     return stmt[2] if stmt[0] == "@" else stmt
 
 
+# ─── Types ────────────────────────────────────────────────────────────────────
+# Inferred types are the strings below, or None for "unknown" (gradual: anything
+# unknown is never complained about, so there are no false positives).
+
+_TYPE_PHRASE = {"number": "a number", "text": "some text", "bool": "true/false",
+                "list": "a list", "record": "a record", "function": "a function"}
+
+# what each built-in returns (None = depends on its input)
+_BUILTIN_RETURN = {
+    "length": "number", "position": "number", "round": "number", "absolute": "number",
+    "sqrt": "number", "random": "number", "remainder": "number", "sum": "number", "average": "number",
+    "uppercase": "text", "lowercase": "text", "trim": "text", "replace": "text", "join": "text",
+    "split": "list", "keys": "list", "sorted": "list", "contains": "bool",
+    # smallest/largest/first/last (element type) and reverse (list or text) -> None
+}
+
+_BUILTIN_DISPLAY = {"sqrt": "square root"}
+
+
+def _static_type(e):
+    """A best-effort type for an expression, ignoring variables (None = unknown)."""
+    op = e[0]
+    if op == "num": return "number"
+    if op == "str": return "text"
+    if op == "bool": return "bool"
+    if op == "list": return "list"
+    if op == "record": return "record"
+    if op == "neg": return "number"
+    if op in ("cmp", "and", "or", "not"): return "bool"
+    if op in ("map", "filter"): return "list"
+    if op == "builtin": return _BUILTIN_RETURN.get(e[1])
+    if op == "binop":
+        if e[1] in ("-", "*", "/"): return "number"
+        if e[1] == "+":
+            l, r = _static_type(e[2]), _static_type(e[3])
+            if l == "text" or r == "text": return "text"
+            if l == "number" and r == "number": return "number"
+            if l == "list" and r == "list": return "list"
+        return None
+    return None   # var / call / index / reduce -> unknown
+
+
 class Scope:
-    def __init__(self, assigned, parent=None):
+    def __init__(self, assigned, parent=None, types=None):
         self.assigned = assigned     # names known in this scope (flow-insensitive)
         self.parent = parent
+        self.types = types or {}     # name -> inferred type (only the confident ones)
+
+    def type_of(self, name):
+        s = self
+        while s:
+            if name in s.types:
+                return s.types[name]
+            if name in s.assigned:
+                return None          # known variable, but its type is unknown
+            s = s.parent
+        return None
 
     def defines(self, name):
         s = self
@@ -99,8 +152,10 @@ class Analyzer:
         for stmt in block[1]:
             n = _unwrap(stmt)
             op = n[0]
-            if op in ("set", "ask"):
+            if op == "set":
                 names.add(n[1])
+            elif op == "ask":
+                names.add(n[2])          # ('ask', prompt, name) — the name is n[2]
             elif op == "count":
                 names.add(n[1]); names |= self.collect_assigned(n[4])
             elif op == "foreach":
@@ -119,14 +174,38 @@ class Analyzer:
                 names |= self.collect_assigned(n[2])
         return names
 
+    def infer_types(self, block):
+        """Infer a type for each variable, kept only when every assignment to it
+        agrees on the same definite type. Flow-insensitive and conservative."""
+        seen = {}
+        def visit(blk):
+            for stmt in blk[1]:
+                n = _unwrap(stmt)
+                op = n[0]
+                if op == "set":     seen.setdefault(n[1], set()).add(_static_type(n[2]))
+                elif op == "ask":   seen.setdefault(n[2], set()).add(None)  # number or text
+                elif op == "count": seen.setdefault(n[1], set()).add("number"); visit(n[4])
+                elif op == "foreach": seen.setdefault(n[1], set()).add(None); visit(n[3])
+                elif op == "if":
+                    for _, b in n[1]: visit(b)
+                    if n[2]: visit(n[2])
+                elif op == "match":
+                    for _, b in n[2]: visit(b)
+                    if n[3]: visit(n[3])
+                elif op in ("repeat", "while"): visit(n[2])
+        visit(block)
+        return {name: next(iter(ts)) for name, ts in seen.items()
+                if len(ts) == 1 and next(iter(ts)) is not None}
+
     # — main entry —
     def analyze(self, tree):
         self.collect_functions(tree)
-        global_scope = Scope(self.collect_assigned(tree))
+        global_scope = Scope(self.collect_assigned(tree), types=self.infer_types(tree))
         self.walk_block(tree, global_scope)
         for name, params in self.functions.items():
             body = self.bodies[name]
-            fscope = Scope(set(params) | self.collect_assigned(body), global_scope)
+            fscope = Scope(set(params) | self.collect_assigned(body), global_scope,
+                           types=self.infer_types(body))
             self.walk_block(body, fscope)
         # unused: a set/ask name read nowhere in the whole program
         for name, line in self.defs:
@@ -202,37 +281,101 @@ class Analyzer:
             self.walk_expr(n[3], scope, line)   # value
         # 'define' is analyzed in its own scope, not inline
 
+    # walk_expr also performs gradual type inference: it returns the expression's
+    # inferred type (or None for unknown) and reports operations that must fail.
     def walk_expr(self, node, scope, line):
         op = node[0]
+        if op == "num":  return "number"
+        if op == "str":  return "text"
+        if op == "bool": return "bool"
         if op == "var":
             self.use_var(node[1], scope, line)
-        elif op == "call":
+            return scope.type_of(node[1])
+        if op == "list":
+            for el in node[1]: self.walk_expr(el, scope, line)
+            return "list"
+        if op == "record":
+            for k, v in node[1]:
+                self.walk_expr(k, scope, line); self.walk_expr(v, scope, line)
+            return "record"
+        if op == "neg":
+            self._require_number(self.walk_expr(node[1], scope, line), "minus", line)
+            return "number"
+        if op == "not":
+            self.walk_expr(node[1], scope, line); return "bool"
+        if op in ("and", "or"):
+            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
+            return "bool"
+        if op == "binop":
+            lt = self.walk_expr(node[2], scope, line)
+            rt = self.walk_expr(node[3], scope, line)
+            return self._check_binop(node[1], lt, rt, line)
+        if op == "cmp":
+            lt = self.walk_expr(node[2], scope, line)
+            rt = self.walk_expr(node[3], scope, line)
+            if node[1] in (">", "<", ">=", "<=") and self._definite(lt) and self._definite(rt) \
+                    and not ((lt == "number" and rt == "number") or (lt == "text" and rt == "text")):
+                self.error(f"I can't compare {_TYPE_PHRASE[lt]} with {_TYPE_PHRASE[rt]}.", line)
+            return "bool"
+        if op == "index":
+            ct = self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
+            if self._definite(ct) and ct not in ("list", "record"):
+                self.error(f"'item ... of ...' needs a list or a record, but got {_TYPE_PHRASE[ct]}.", line)
+            return None
+        if op in ("map", "filter", "reduce"):
+            ft = self.walk_expr(node[1], scope, line)
+            lt = self.walk_expr(node[2], scope, line)
+            if op == "reduce": self.walk_expr(node[3], scope, line)
+            if self._definite(ft) and ft != "function":
+                self.error(f"'{op}' needs a function, but got {_TYPE_PHRASE[ft]}.", line)
+            if self._definite(lt) and lt != "list":
+                self.error(f"'{op} ... over ...' needs a list, but got {_TYPE_PHRASE[lt]}.", line)
+            return "list" if op in ("map", "filter") else None
+        if op == "builtin":
+            argtypes = [self.walk_expr(a, scope, line) for a in node[2]]
+            self._check_builtin(node[1], argtypes, line)
+            return _BUILTIN_RETURN.get(node[1])
+        if op == "call":
             self.check_call(node, scope, line)
             for a in node[2]:
                 self.walk_expr(a, scope, line)
-        elif op == "builtin":
-            for a in node[2]:
-                self.walk_expr(a, scope, line)
-        elif op == "index":
-            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
-        elif op in ("binop", "cmp"):
-            self.walk_expr(node[2], scope, line); self.walk_expr(node[3], scope, line)
-        elif op in ("and", "or"):
-            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
-        elif op in ("neg", "not"):
-            self.walk_expr(node[1], scope, line)
-        elif op == "list":
-            for el in node[1]:
-                self.walk_expr(el, scope, line)
-        elif op == "record":
-            for k, v in node[1]:
-                self.walk_expr(k, scope, line); self.walk_expr(v, scope, line)
-        elif op in ("map", "filter"):
-            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
-        elif op == "reduce":
-            self.walk_expr(node[1], scope, line); self.walk_expr(node[2], scope, line)
-            self.walk_expr(node[3], scope, line)
-        # num / str / bool: nothing to check
+            return None
+        return None
+
+    # — type-check helpers (gradual: only complain about definite types) —
+    @staticmethod
+    def _definite(t):
+        return t in _TYPE_PHRASE
+
+    def _require_number(self, t, opname, line):
+        if t in ("text", "bool", "list", "record", "function"):
+            self.error(f"'{opname}' only works with numbers, but I got {_TYPE_PHRASE[t]}.", line)
+
+    def _check_binop(self, opc, lt, rt, line):
+        if opc == "+":
+            if lt == "text" or rt == "text": return "text"
+            if lt == "list" and rt == "list": return "list"
+            self._require_number(lt, "plus", line); self._require_number(rt, "plus", line)
+            return "number"
+        name = {"-": "minus", "*": "multiplied by", "/": "divided by"}[opc]
+        self._require_number(lt, name, line); self._require_number(rt, name, line)
+        return "number"
+
+    def _check_builtin(self, name, argtypes, line):
+        t0 = argtypes[0] if argtypes else None
+        if not self._definite(t0):
+            return
+        display = _BUILTIN_DISPLAY.get(name, name)
+        if name in ("round", "absolute", "sqrt") and t0 != "number":
+            self.error(f"'{display} of' needs a number, but got {_TYPE_PHRASE[t0]}.", line)
+        elif name in ("sum", "average", "smallest", "largest", "first", "last", "sorted") and t0 != "list":
+            self.error(f"'{display} of' needs a list, but got {_TYPE_PHRASE[t0]}.", line)
+        elif name == "join" and t0 != "list":
+            self.error(f"'join' needs a list, but got {_TYPE_PHRASE[t0]}.", line)
+        elif name == "length" and t0 not in ("list", "text", "record"):
+            self.error(f"'length of' needs text, a list, or a record, but got {_TYPE_PHRASE[t0]}.", line)
+        elif name == "keys" and t0 != "record":
+            self.error(f"'keys of' needs a record, but got {_TYPE_PHRASE[t0]}.", line)
 
     def use_var(self, name, scope, line):
         self.reads.add(name)

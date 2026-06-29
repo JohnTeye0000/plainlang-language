@@ -64,6 +64,22 @@ has("undefined variable inside string interpolation",
 clean("interpolation of a defined variable is fine", 'set name to "Al"\nsay "Hi {name}"')
 clean("calling a function held in a variable is not flagged", 'define f with n\nreturn n\nend\nset g to f\nsay g with 3')
 
+# ── gradual type checking ─────────────────────────────────────────────────────
+print("Type checking")
+has("text minus a number (literal)", 'say "a" minus 1', "only works with numbers", "error")
+has("text variable used in arithmetic", 'set name to "Bob"\nsay name minus 1', "only works with numbers", "error")
+has("square root of text", 'say square root of "x"', "needs a number", "error")
+has("length of a number", 'say length of 5', "length of", "error")
+has("compare a number with text", 'if 5 is greater than "a" then\nsay "x"\nend', "can't compare", "error")
+has("map needs a function", 'say map 5 over (list of 1, 2)', "needs a function", "error")
+has("sum of a number", 'say sum of 5', "needs a list", "error")
+# gradual: unknown types are never flagged (no false positives)
+clean("unknown parameter type is not flagged", 'define f with n\nsay n minus 1\nend\nsay f with 1')
+clean("input (number-or-text) is not flagged", 'ask "age?" into a\nsay a plus 1')
+clean("number variable in arithmetic is fine", 'set x to 5\nsay x minus 1')
+clean("text concatenation with plus is fine", 'set name to "Al"\nsay name plus "!" plus 1')
+clean("ask-assigned variable is defined", 'ask "name?" into who\nsay who')
+
 # ── multi-error reporting: many problems at once ──────────────────────────────
 print("Multi-error reporting")
 multi = 'set a to 1\nsay b\nsay c\ncall nope'

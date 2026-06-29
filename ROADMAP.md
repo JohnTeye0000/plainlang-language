@@ -46,7 +46,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 
 Deepen the back end into something a compilers course would recognize:
 
-- [ ] An **optional/gradual type checker** with friendly type errors
+- [x] A **gradual type checker** — infers variable types, flags operations that must fail (text minus a number, comparing incomparable types, `length of` a number, …); gradual, so unknowns are never flagged. *(Also fixed a real bug: `ask`-assigned variables weren't being tracked.)*
 - [x] Optimizer passes: **constant folding** + **dead-code elimination** + **peephole** (jump threading & redundant-jump removal) — `--optimize` reports the shrink; cross-validated to preserve output.
 - [ ] Parser **error recovery** → report many syntax errors at once
 - [ ] **Source maps** linking bytecode back to lines
