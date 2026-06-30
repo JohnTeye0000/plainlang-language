@@ -17,6 +17,7 @@ Usage:
     python plainvm.py --compare program.plang  # run BOTH engines, check they agree
     python plainvm.py --bench                  # benchmark VM vs tree-walker
     python plainvm.py --optimize program.plang # how much the optimizer removes
+    python plainvm.py --trace program.plang    # watch the VM execute, step by step
 """
 
 import sys
@@ -612,13 +613,14 @@ _MISS = object()   # sentinel for "variable not found" without exceptions
 
 
 class VM:
-    def __init__(self, program, on_output=None, on_input=None, rng=None):
+    def __init__(self, program, on_output=None, on_input=None, rng=None, on_step=None):
         self.program = program
         self.globals = {}
         self.stack = []
         self.line = 0
         self.on_output = on_output or (lambda s: print(s))
         self.on_input = on_input or (lambda p: input(p))
+        self.on_step = on_step      # optional tracer: on_step(line, op, arg, stack)
         import random
         self.rng = rng or random.random
         self.steps = 0
@@ -637,6 +639,7 @@ class VM:
         push = stack.append
         pop = stack.pop
         functions = self.program.functions
+        on_step = self.on_step
         MISS = _MISS
         frames = []                 # saved (code, consts, locals, ip) per call
         ip = 0
@@ -649,6 +652,8 @@ class VM:
             steps += 1
             if steps > LIMIT:
                 raise PlainLangError("Your program ran for too long and was stopped.", line)
+            if on_step is not None:
+                on_step(line, op, arg, stack)
 
             if op == "LOAD":
                 v = floc.get(arg, MISS)
@@ -979,6 +984,8 @@ def disassemble(program):
         if params is not None:
             header += f"  params: {', '.join(params) or '(none)'}"
         out.append(header)
+        out.append("   #  line  instruction")
+        prev_line = None
         for i, (op, arg, line) in enumerate(chunk.code):
             shown = ""
             if op == "CONST":
@@ -991,7 +998,10 @@ def disassemble(program):
                 shown = f"{arg[0]} ({arg[1]} arg)"
             elif op == "BUILD_LIST":
                 shown = f"{arg} items"
-            out.append(f"  {i:>4}  {op:<16} {shown}")
+            # the source-map column: only show the line when it changes
+            line_col = "" if line == prev_line else str(line)
+            prev_line = line
+            out.append(f"  {i:>4}  {line_col:>4}  {op:<16} {shown}")
         out.append("")
     dis_chunk(program.main)
     for fn in program.functions.values():
@@ -1011,6 +1021,38 @@ def run_source(source, on_output=print, on_input=input, rng=None):
         msg = pl.format_error(source, e)
         on_output(msg)
         return False, msg
+
+
+def _trace(path, limit=200):
+    """Run a program and print each bytecode step: source line, op, and stack."""
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    program = compile_program(source)
+    steps = [0]
+    printed = []
+
+    def show(line, op, arg, stack):
+        steps[0] += 1
+        if steps[0] > limit:
+            return
+        if op in ("CALL", "BUILTIN"):
+            detail = arg[0]
+        elif op in ("LOAD", "STORE", "JUMP", "JUMP_IF_FALSE", "JUMP_IF_TRUE",
+                    "LIST_ADD", "LIST_REMOVE", "INPUT", "BUILD_LIST", "BUILD_RECORD"):
+            detail = str(arg)
+        else:
+            detail = ""
+        snapshot = "[" + ", ".join(to_str(x) for x in stack) + "]"   # stack before this op
+        printed.append(f"  ln {line:<3} {op:<14} {detail:<10} stack {snapshot}")
+
+    out = []
+    VM(program, on_output=out.append, on_step=show).run()
+    print("Execution trace (bytecode step by step)")
+    print("\n".join(printed))
+    if steps[0] > limit:
+        print(f"  ... ({steps[0] - limit} more steps)")
+    print("\nProgram output:")
+    print("\n".join(out))
 
 
 def _bench():
@@ -1078,6 +1120,8 @@ if __name__ == "__main__":
         sys.exit(0 if _compare(args[1]) else 1)
     elif args[0] == "--optimize":
         _optimize_report(args[1])
+    elif args[0] == "--trace":
+        _trace(args[1])
     else:
         try:
             with open(args[0], encoding="utf-8") as f:

@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 281 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 285 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -226,7 +226,12 @@ $ python plainvm.py --dis program.plang       # disassemble to bytecode
 $ python plainvm.py --compare program.plang   # prove both back ends agree
 $ python plainvm.py --bench                    # VM vs tree-walker timing
 $ python plainvm.py --optimize program.plang  # how much the optimizer removes
+$ python plainvm.py --trace program.plang     # watch the VM execute, step by step
 ```
+
+`--trace` prints every bytecode step with its **source line** and the **operand stack**, so
+you can watch the stack machine run — and see the optimizer's work, since `set x to 2 plus 3`
+already traces as `CONST 5`. The disassembler carries the same source-line column.
 
 The compiler runs an **optimizer** before emitting bytecode — three passes:
 *constant folding* (any expression whose operands are all literals is pre-computed, so

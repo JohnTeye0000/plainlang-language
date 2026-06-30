@@ -49,7 +49,7 @@ Deepen the back end into something a compilers course would recognize:
 - [x] A **gradual type checker** — infers variable types, flags operations that must fail (text minus a number, comparing incomparable types, `length of` a number, …); gradual, so unknowns are never flagged. *(Also fixed a real bug: `ask`-assigned variables weren't being tracked.)*
 - [x] Optimizer passes: **constant folding** + **dead-code elimination** + **peephole** (jump threading & redundant-jump removal) — `--optimize` reports the shrink; cross-validated to preserve output.
 - [ ] Parser **error recovery** → report many syntax errors at once
-- [ ] **Source maps** linking bytecode back to lines
+- [x] **Source maps** — disassembler shows the source line per instruction, and `--trace` watches the VM execute step by step (source line + operand stack)
 - [ ] A native backend: compile to **WebAssembly** (or C)
 - [ ] Release **v0.3**
 

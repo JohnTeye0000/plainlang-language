@@ -188,6 +188,19 @@ opt_check("peephole shrinks a single-branch if",
           count('if true then\nsay "yes"\nend\nsay "done"', True)
           < count('if true then\nsay "yes"\nend\nsay "done"', False))
 
+# observability: tracing + source-mapped disassembly
+print("Observability")
+_steps = []
+vm.VM(vm.compile_program("set x to 5\nsay x plus 1"),
+      on_output=lambda s: None,
+      on_step=lambda line, op, arg, stack: _steps.append((line, op))).run()
+opt_check("on_step fires for every executed instruction", len(_steps) >= 6)
+opt_check("the trace sees instructions from both source lines",
+          {ln for ln, _ in _steps} == {1, 2})
+opt_check("tracing does not change behaviour", _vm_out("set x to 5\nsay x plus 1") == ["6"])
+opt_check("disassembly carries a source-line column",
+          "line" in vm.disassemble(vm.compile_program("say 1 plus 2")))
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)
