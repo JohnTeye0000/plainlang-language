@@ -201,6 +201,33 @@ opt_check("tracing does not change behaviour", _vm_out("set x to 5\nsay x plus 1
 opt_check("disassembly carries a source-line column",
           "line" in vm.disassemble(vm.compile_program("say 1 plus 2")))
 
+# portable bytecode (compile -> JSON -> load -> run)
+print("Portable bytecode")
+import json as _json
+
+def _bc_out(src):
+    data = _json.loads(_json.dumps(vm.serialize(vm.compile_program(src))))
+    out = []
+    vm.VM(vm.deserialize(data), on_output=out.append, rng=lambda: 0.5).run()
+    return out
+
+def _rejects_bad_version():
+    try:
+        vm.deserialize({"plainlang_bytecode": 999, "main": {"name": "main", "consts": [], "code": []},
+                        "functions": {}})
+        return False
+    except Exception:
+        return True
+
+opt_check("bytecode round-trips through JSON and runs",
+          _bc_out("set t to 0\ncount i from 1 to 5\nset t to t plus i\nend\nsay t") == ["15"])
+opt_check("round-tripped bytecode matches a direct run (recursion + lists)",
+          _bc_out('define f with n\nif n is at most 1 then\nreturn 1\nend\n'
+                  'return n multiplied by f with (n minus 1)\nend\n'
+                  'say sum of (list of 3, 4)\nsay f with 5') == ["7", "120"])
+opt_check("a wrong-version bytecode file is rejected",
+          _rejects_bad_version())
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)

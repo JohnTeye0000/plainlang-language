@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 285 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 288 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -227,7 +227,13 @@ $ python plainvm.py --compare program.plang   # prove both back ends agree
 $ python plainvm.py --bench                    # VM vs tree-walker timing
 $ python plainvm.py --optimize program.plang  # how much the optimizer removes
 $ python plainvm.py --trace program.plang     # watch the VM execute, step by step
+$ python plainvm.py --emit program.plang      # compile to a portable bytecode file
+$ python plainvm.py --run-bc program.plbc     # run compiled bytecode (no source, no parser)
 ```
+
+Like `.pyc`/`.class`, PlainLang can compile a program **ahead of time** to a portable
+bytecode file and run it later without the source or the parser — the round-trip is
+verified to produce identical output to a direct run.
 
 `--trace` prints every bytecode step with its **source line** and the **operand stack**, so
 you can watch the stack machine run — and see the optimizer's work, since `set x to 2 plus 3`

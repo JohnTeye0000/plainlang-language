@@ -18,6 +18,8 @@ Usage:
     python plainvm.py --bench                  # benchmark VM vs tree-walker
     python plainvm.py --optimize program.plang # how much the optimizer removes
     python plainvm.py --trace program.plang    # watch the VM execute, step by step
+    python plainvm.py --emit program.plang     # compile to portable bytecode (JSON)
+    python plainvm.py --run-bc program.plbc    # run a compiled bytecode file directly
 """
 
 import sys
@@ -1009,6 +1011,38 @@ def disassemble(program):
     return "\n".join(out)
 
 
+# ─── Portable bytecode (ahead-of-time artifact) ───────────────────────────────
+# Compile once, save the optimized bytecode, and run it later without the source
+# or the parser — the way .pyc / .class files work.
+
+BYTECODE_VERSION = 1
+
+
+def serialize(program):
+    def ser(chunk):
+        return {"name": chunk.name, "consts": chunk.consts,
+                "code": [list(instr) for instr in chunk.code]}
+    return {
+        "plainlang_bytecode": BYTECODE_VERSION,
+        "main": ser(program.main),
+        "functions": {name: {"params": list(fn.params), "chunk": ser(fn.chunk)}
+                      for name, fn in program.functions.items()},
+    }
+
+
+def deserialize(data):
+    if data.get("plainlang_bytecode") != BYTECODE_VERSION:
+        raise PlainLangError("This bytecode file was built by a different version of PlainLang.")
+    def de(d):
+        chunk = Chunk(d["name"])
+        chunk.consts = d["consts"]
+        chunk.code = [tuple(instr) for instr in d["code"]]
+        return chunk
+    functions = {name: Function(name, f["params"], de(f["chunk"]))
+                 for name, f in data["functions"].items()}
+    return Program(de(data["main"]), functions)
+
+
 # ─── Public entry points ──────────────────────────────────────────────────────
 
 def run_source(source, on_output=print, on_input=input, rng=None):
@@ -1122,6 +1156,18 @@ if __name__ == "__main__":
         _optimize_report(args[1])
     elif args[0] == "--trace":
         _trace(args[1])
+    elif args[0] == "--emit":
+        import json
+        with open(args[1], encoding="utf-8") as f:
+            print(json.dumps(serialize(compile_program(f.read()))))
+    elif args[0] == "--run-bc":
+        import json
+        with open(args[1], encoding="utf-8") as f:
+            data = json.load(f)
+        try:
+            VM(deserialize(data)).run()
+        except PlainLangError as e:
+            print(e.show())
     else:
         try:
             with open(args[0], encoding="utf-8") as f:

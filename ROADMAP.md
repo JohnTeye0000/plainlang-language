@@ -50,6 +50,7 @@ Deepen the back end into something a compilers course would recognize:
 - [x] Optimizer passes: **constant folding** + **dead-code elimination** + **peephole** (jump threading & redundant-jump removal) — `--optimize` reports the shrink; cross-validated to preserve output.
 - [ ] Parser **error recovery** → report many syntax errors at once
 - [x] **Source maps** — disassembler shows the source line per instruction, and `--trace` watches the VM execute step by step (source line + operand stack)
+- [x] **Portable bytecode** — `--emit` compiles a program to a distributable bytecode file; `--run-bc` runs it without the source or parser (round-trip verified)
 - [ ] A native backend: compile to **WebAssembly** (or C)
 - [ ] Release **v0.3**
 
