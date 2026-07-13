@@ -213,10 +213,16 @@ def tokenize(source):
 BLOCK_ENDERS = {"end", "otherwise", "when"}
 
 
+_STATEMENT_STARTERS = {"set", "say", "ask", "if", "match", "repeat", "while", "count",
+                       "for", "define", "call", "return", "add", "remove", "stop", "skip"}
+
+
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
+        self.errors = []          # collected when recovering
+        self.recovering = False   # panic-mode recovery (used by the static checker)
 
     # — cursor helpers —
     def peek(self):
@@ -273,15 +279,38 @@ class Parser:
     def parse(self):
         stmts = []
         while self.kind() != "EOF":
-            stmts.append(self.statement())
+            s = self._statement_or_recover()
+            if s is not None:
+                stmts.append(s)
         return ("block", stmts)
 
     def block(self):
         """A run of statements ending at 'end' or 'otherwise' (not consumed)."""
         stmts = []
         while self.kind() != "EOF" and not self.is_kw(*BLOCK_ENDERS):
-            stmts.append(self.statement())
+            s = self._statement_or_recover()
+            if s is not None:
+                stmts.append(s)
         return ("block", stmts)
+
+    def _statement_or_recover(self):
+        # Normally a syntax error aborts. In recovery mode we record it and skip
+        # ahead to the next statement, so several syntax errors are found at once.
+        try:
+            return self.statement()
+        except PlainLangError as e:
+            if not self.recovering:
+                raise
+            self.errors.append(e)
+            self._recover()
+            return None
+
+    def _recover(self):
+        """Panic-mode: skip the bad token(s) up to the next place we can resume."""
+        self.advance()   # always make progress past the offending token
+        while self.kind() != "EOF" and not self.is_kw(*BLOCK_ENDERS) \
+                and not (self.is_kw(*_STATEMENT_STARTERS) or self.kind() == "IDENT"):
+            self.advance()
 
     # — statements —
     def statement(self):
@@ -1348,6 +1377,14 @@ BUILT-IN HELPERS
 
 def _format_friendly(err):
     return err.show()
+
+
+def parse_all(tokens):
+    """Parse with error recovery. Returns (tree, [syntax errors])."""
+    p = Parser(tokens)
+    p.recovering = True
+    tree = p.parse()
+    return tree, p.errors
 
 
 def run_source(source, on_output=print, on_input=input):

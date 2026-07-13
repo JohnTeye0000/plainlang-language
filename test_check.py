@@ -91,6 +91,14 @@ check("problems are sorted by line",
 print("Syntax errors")
 has("syntax error surfaces", 'if x is greater 3 then\nend', "expected the word 'than'", "error")
 
+# ── error recovery: several syntax errors in one pass ─────────────────────────
+print("Error recovery")
+_two = 'if a is greater 3 then\nsay "x"\nend\nif b is less 4 then\nsay "y"\nend'
+check("reports several syntax errors at once (recovery)", len(diags(_two)) >= 2,
+      f"got {len(diags(_two))}: {messages(_two)!r}")
+clean("a valid program is still clean after recovery was added",
+      'set x to 5\nif x is greater than 3 then\nsay "big"\nend')
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)

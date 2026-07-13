@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 288 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 290 passing tests &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -293,6 +293,9 @@ $ python plaincheck.py program.plang
 
 It is tuned for **precision** — correct programs are never flagged — because a teaching
 tool that cries wolf is worse than none.
+
+When a program has several *syntax* errors, the checker uses **panic-mode error recovery**
+to keep going past each one and report them all at once, instead of stopping at the first.
 
 The same pass does **gradual type checking**: it infers a type for each variable (from
 literals and consistent assignments) and reports operations that must fail, while leaving

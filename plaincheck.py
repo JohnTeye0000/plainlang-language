@@ -426,10 +426,14 @@ def check_source(source):
     """Return (diagnostics, rendered_text)."""
     try:
         tokens = pl.tokenize(source)
-        tree = pl.Parser(tokens).parse()
-    except PlainLangError as e:
+    except PlainLangError as e:                 # a lexer error — can't go further
         e.severity = "error"
         return [e], render(source, e)
+    tree, syntax_errors = pl.parse_all(tokens)  # recover so we find several at once
+    if syntax_errors:
+        for e in syntax_errors:
+            e.severity = "error"
+        return syntax_errors, "\n\n".join(render(source, e) for e in syntax_errors)
     diags = Analyzer(source).analyze(tree)
     text = "\n\n".join(render(source, d) for d in diags)
     return diags, text
