@@ -56,6 +56,10 @@ PROGRAMS = {
     "count leaves last value": 'count i from 1 to 4\nend\nsay i',
     "while": 'set x to 0\nwhile x is less than 4\nset x to x plus 1\nsay x\nend',
     "nested loops": 'count i from 1 to 3\ncount j from 1 to 2\nsay i plus "," plus j\nend\nend',
+    # regression: nested 'count' reusing the same variable name — the inner loop
+    # must not corrupt the outer loop's counter (found by the differential fuzzer)
+    "nested count, same variable": 'set n to 0\ncount i from 1 to 3\ncount i from 1 to 2\nset n to n plus 1\nend\nend\nsay n',
+    "nested count same var, outer runs fully": 'count i from 1 to 4\ncount i from 1 to 2\nend\nsay "tick"\nend',
     "stop exits loop": 'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend',
     "skip next pass": 'count i from 1 to 6\nif i is equal to 3 then\nskip\nend\nsay i\nend',
     "skip in while advances": 'set x to 0\nwhile x is less than 5\nset x to x plus 1\nif x is equal to 2 then\nskip\nend\nsay x\nend',

@@ -247,23 +247,24 @@ class Compiler:
 
     def s_count(self, node):
         # count VAR from START to STOP ... end   (works up OR down)
-        # The "in range?" test is  (var - stop) * step <= 0  — a single test
-        # that works in both directions. The next value is committed to VAR
-        # only when it is still in range, so after the loop VAR holds the last
-        # value actually used (matching the tree-walker, not the overshoot).
+        # Iteration is driven by a HIDDEN counter, and VAR is copied from it at
+        # the start of each pass. That way the body reassigning VAR (e.g. a nested
+        # 'count' reusing the same name) can't corrupt the loop — matching the
+        # tree-walker, whose Python 'for' has its own independent iterator.
+        # The "in range?" test is  (cnt - stop) * step <= 0  (works both ways).
         _, var, start, stop, body = node
-        stop_t, step_t, next_t = self.newtmp("stop"), self.newtmp("step"), self.newtmp("next")
+        cnt, stop_t, step_t = self.newtmp("cnt"), self.newtmp("stop"), self.newtmp("step")
 
-        def in_range_test(value_name):
-            self.emit("LOAD", value_name); self.emit("LOAD", stop_t); self.emit("SUB")
+        def in_range_test():
+            self.emit("LOAD", cnt); self.emit("LOAD", stop_t); self.emit("SUB")
             self.emit("LOAD", step_t); self.emit("MUL")
             self.const(0); self.emit("LE")
 
         self.loops.append({"breaks": [], "continues": []})
-        self.expr(start); self.emit("STORE", var)
+        self.expr(start); self.emit("STORE", cnt)
         self.expr(stop);  self.emit("STORE", stop_t)
-        # step = (stop >= start) ? 1 : -1     (var still equals start here)
-        self.emit("LOAD", stop_t); self.emit("LOAD", var); self.emit("GE")
+        # step = (stop >= start) ? 1 : -1     (cnt still equals start here)
+        self.emit("LOAD", stop_t); self.emit("LOAD", cnt); self.emit("GE")
         j_neg = self.emit("JUMP_IF_FALSE", None)
         self.const(1); self.emit("STORE", step_t)
         j_after = self.emit("JUMP", None)
@@ -271,18 +272,16 @@ class Compiler:
         self.const(-1); self.emit("STORE", step_t)
         self.patch(j_after, self.here())
 
-        in_range_test(var)                          # is START itself in range?
-        j_end = self.emit("JUMP_IF_FALSE", None)
-        body_start = self.here()
-        self.block(body)
-        cont = self.here()                          # 'skip' -> advance the variable
-        self.emit("LOAD", var); self.emit("LOAD", step_t); self.emit("ADD"); self.emit("STORE", next_t)
-        in_range_test(next_t)                        # is the NEXT value in range?
+        test = self.here()
+        in_range_test()
         j_exit = self.emit("JUMP_IF_FALSE", None)
-        self.emit("LOAD", next_t); self.emit("STORE", var)
-        self.emit("JUMP", body_start)
+        self.emit("LOAD", cnt); self.emit("STORE", var)     # VAR = counter, each pass
+        self.block(body)
+        cont = self.here()                                  # 'skip' -> advance the counter
+        self.emit("LOAD", cnt); self.emit("LOAD", step_t); self.emit("ADD"); self.emit("STORE", cnt)
+        self.emit("JUMP", test)
         end = self.here()
-        self._close_loop(cont, end, [j_exit, j_end])
+        self._close_loop(cont, end, [j_exit])
 
     def s_foreach(self, node):
         _, var, seq, body = node

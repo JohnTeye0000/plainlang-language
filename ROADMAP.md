@@ -62,7 +62,7 @@ The artifacts that prove engineering maturity:
 - [ ] A **VS Code extension** wired to the language server
 - [ ] A **code formatter** (`plainfmt`, like gofmt/prettier)
 - [ ] **CI/CD** with GitHub Actions running every test suite on each push (green badge)
-- [ ] A **fuzzer** / property-based tests for the parser and VM
+- [x] A **differential fuzzer** — random programs run through both engines and asserted to agree; already found and fixed a real codegen bug (nested `count` loops reusing a variable). Wired into CI.
 - [ ] Release **v0.4**
 
 ## Phase 4 — Product & reach  *(weeks)*

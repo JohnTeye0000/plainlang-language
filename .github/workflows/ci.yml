@@ -22,6 +22,8 @@ jobs:
         run: python test_diagnostics.py
       - name: Static analyzer
         run: python test_check.py
+      - name: Differential fuzzing (both engines must agree)
+        run: python test_fuzz.py
 
   javascript:
     name: JavaScript engine (interpreter, transpiler, diagnostics)

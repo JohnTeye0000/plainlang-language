@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 290 passing tests &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 292 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -37,7 +37,9 @@ run one step at a time.
 | **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
 | **`test_check.py`** | An 18-case suite for the static analyzer (and its precision — clean code must not be flagged). |
-| **`test_js.js`** | A 19-case Node suite for the JavaScript engine, transpiler, and diagnostics. |
+| **`test_js.js`** | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
+| **`fuzz.py`** | A **differential fuzzer** — generates random programs and checks the tree-walker and VM agree on every one. |
+| **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
 ---
@@ -218,6 +220,12 @@ The tree-walker and the bytecode VM are completely separate implementations. The
 held to the same behaviour by `test_vm.py`, which runs a battery of programs through both
 and asserts the output is identical — *including* the wording of every error message.
 Two implementations that agree on everything is strong evidence both are correct.
+
+On top of the hand-written cases, `fuzz.py` does **differential fuzzing** — it generates
+thousands of random programs and checks the two engines agree on each. This actually
+found a real bug: nested `count` loops reusing the same variable name diverged (the VM used
+the variable itself as the loop counter, so an inner loop corrupted the outer one). The fix
+was to drive iteration with a hidden counter. Now 10,000+ random programs agree.
 
 ### Seeing the bytecode
 
