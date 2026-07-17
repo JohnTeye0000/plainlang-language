@@ -60,6 +60,17 @@ PROGRAMS = {
     # must not corrupt the outer loop's counter (found by the differential fuzzer)
     "nested count, same variable": 'set n to 0\ncount i from 1 to 3\ncount i from 1 to 2\nset n to n plus 1\nend\nend\nsay n',
     "nested count same var, outer runs fully": 'count i from 1 to 4\ncount i from 1 to 2\nend\nsay "tick"\nend',
+    # regression: an error occurring in the same expression as, but after, a
+    # function call used to be blamed on a line inside the function body
+    # instead of the real call site (found by the differential fuzzer)
+    "error line survives a function call": 'define double with n\nreturn n multiplied by 2\nend\nsay (double with 5) plus (remainder of 1 and 0)',
+    "error line survives reduce's function call": 'define add2 with a and b\nreturn a plus b\nend\nsay (reduce add2 over (list of 1, 2) from 0) plus (remainder of 1 and 0)',
+    # regression: round/absolute/sqrt/random/remainder used to call int()/round()
+    # directly on their argument, crashing with a raw Python/JS exception instead
+    # of a friendly PlainLangError when given non-number input
+    "round rejects text": 'say round of "hi"',
+    "absolute rejects text": 'say absolute of "hi"',
+    "remainder rejects text": 'say remainder of "hi" and 2',
     "stop exits loop": 'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend',
     "skip next pass": 'count i from 1 to 6\nif i is equal to 3 then\nskip\nend\nsay i\nend',
     "skip in while advances": 'set x to 0\nwhile x is less than 5\nset x to x plus 1\nif x is equal to 2 then\nskip\nend\nsay x\nend',

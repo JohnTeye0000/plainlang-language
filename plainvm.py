@@ -864,8 +864,11 @@ class VM:
 
     def need_numbers(self, name, a, b):
         for v in (a, b):
-            if not isinstance(v, (int, float)) or isinstance(v, bool):
-                raise PlainLangError(f"'{name}' only works with numbers, but I got {type_name(v)}.", self.line)
+            self.need_number(name, v)
+
+    def need_number(self, name, v):
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            raise PlainLangError(f"'{name}' only works with numbers, but I got {type_name(v)}.", self.line)
 
     def compare(self, op, a, b):
         try:
@@ -917,13 +920,15 @@ class VM:
             if isinstance(args[0], list):
                 return args[1] in args[0]
             return to_str(args[1]) in to_str(args[0])
-        if name == "round":     return round(args[0])
-        if name == "absolute":  return abs(args[0])
+        if name == "round":     self.need_number(name, args[0]); return round(args[0])
+        if name == "absolute":  self.need_number(name, args[0]); return abs(args[0])
         if name == "sqrt":
+            self.need_number(name, args[0])
             if args[0] < 0:
                 raise PlainLangError("I can't take the square root of a negative number.", self.line)
             r = math.sqrt(args[0]); return int(r) if r == int(r) else r
         if name == "random":
+            self.need_number(name, args[0]); self.need_number(name, args[1])
             lo, hi = int(args[0]), int(args[1])
             lo, hi = min(lo, hi), max(lo, hi)
             return lo + int(self.rng() * (hi - lo + 1))
@@ -957,6 +962,7 @@ class VM:
                 except TypeError:
                     raise PlainLangError("I can only sort a list of all numbers or all text.", self.line)
         if name == "remainder":
+            self.need_number(name, args[0]); self.need_number(name, args[1])
             a, b = int(args[0]), int(args[1])
             if b == 0:
                 raise PlainLangError("You can't take a remainder when dividing by zero.", self.line)

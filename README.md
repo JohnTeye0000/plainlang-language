@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 292 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 299 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -38,7 +38,7 @@ run one step at a time.
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
 | **`test_check.py`** | An 18-case suite for the static analyzer (and its precision — clean code must not be flagged). |
 | **`test_js.js`** | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
-| **`fuzz.py`** | A **differential fuzzer** — generates random programs and checks the tree-walker and VM agree on every one. |
+| **`fuzz.py`** | A **differential fuzzer** — a type-aware generator emits random programs across the whole language and checks the tree-walker and VM agree on every one. |
 | **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
@@ -221,11 +221,22 @@ held to the same behaviour by `test_vm.py`, which runs a battery of programs thr
 and asserts the output is identical — *including* the wording of every error message.
 Two implementations that agree on everything is strong evidence both are correct.
 
-On top of the hand-written cases, `fuzz.py` does **differential fuzzing** — it generates
-thousands of random programs and checks the two engines agree on each. This actually
-found a real bug: nested `count` loops reusing the same variable name diverged (the VM used
-the variable itself as the loop counter, so an inner loop corrupted the outer one). The fix
-was to drive iteration with a hidden counter. Now 10,000+ random programs agree.
+On top of the hand-written cases, `fuzz.py` does **differential fuzzing** — a type-aware
+generator emits random programs across the *whole* language (numbers, text, lists,
+booleans, `if`/`count`/`match`, function calls, `map`/`filter`/`reduce`), and every one is
+checked for identical output on both engines. This has found real bugs twice:
+
+1. Nested `count` loops reusing the same variable name diverged — the VM used the loop
+   variable itself as the iteration counter, so an inner loop corrupted the outer one. Fixed
+   by driving iteration with a hidden counter.
+2. An error occurring in the same expression as, but *after*, a function call was blamed on
+   a line inside the function body instead of the real call site — the interpreters weren't
+   restoring the "current line" when a call returned. Fixed in all three engines. The same
+   sweep also caught `round`/`absolute`/`sqrt`/`random`/`remainder` calling straight into
+   `int()`/`round()` without checking their argument was a number first, so bad input raised
+   a raw crash instead of a friendly error — now they all validate first.
+
+Now 20,000+ random programs across the full language agree.
 
 ### Seeing the bytecode
 

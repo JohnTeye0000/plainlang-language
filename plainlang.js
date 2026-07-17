@@ -723,8 +723,10 @@
         throw new PlainLangError(`'${fn.name}' expects ${fn.params.length} value(s), but got ${argExprs.length}.`, this.currentLine);
       const local = new Environment(this.globals);
       for (let k = 0; k < fn.params.length; k++) local.vars[fn.params[k]] = this.eval(argExprs[k], env);
+      const callerLine = this.currentLine;
       try { this.execBlock(fn.body, local); }
       catch (e) { if (e[RETURN]) return e.value; throw e; }
+      finally { this.currentLine = callerLine; }
       return null;
     }
 
@@ -734,8 +736,10 @@
         throw new PlainLangError(`'${fn.name}' expects ${fn.params.length} value(s), but got ${args.length}.`, this.currentLine);
       const local = new Environment(this.globals);
       for (let k = 0; k < fn.params.length; k++) local.vars[fn.params[k]] = args[k];
+      const callerLine = this.currentLine;
       try { this.execBlock(fn.body, local); }
       catch (e) { if (e[RETURN]) return e.value; throw e; }
+      finally { this.currentLine = callerLine; }
       return null;
     }
     needListFn(fn, seq, name) {
@@ -816,7 +820,10 @@
       }
     }
     needNumbers(name, a, b) {
-      for (const v of [a, b]) if (typeof v !== "number")
+      for (const v of [a, b]) this.needNumber(name, v);
+    }
+    needNumber(name, v) {
+      if (typeof v !== "number")
         throw new PlainLangError(`'${name}' only works with numbers, but I got ${typeName(v)}.`, this.currentLine);
     }
     compare(op, a, b) {
@@ -857,13 +864,15 @@
         if (Array.isArray(args[0])) return args[0].includes(args[1]);
         return toStr(args[0]).includes(toStr(args[1]));
       }
-      if (name === "round") return Math.round(args[0]);
-      if (name === "absolute") return Math.abs(args[0]);
+      if (name === "round") { this.needNumber(name, args[0]); return Math.round(args[0]); }
+      if (name === "absolute") { this.needNumber(name, args[0]); return Math.abs(args[0]); }
       if (name === "sqrt") {
+        this.needNumber(name, args[0]);
         if (args[0] < 0) throw new PlainLangError("I can't take the square root of a negative number.", this.currentLine);
         return Math.sqrt(args[0]);
       }
       if (name === "random") {
+        this.needNumber(name, args[0]); this.needNumber(name, args[1]);
         const lo = Math.floor(args[0]), hi = Math.floor(args[1]);
         const a = Math.min(lo, hi), b = Math.max(lo, hi);
         return a + Math.floor(this.rng() * (b - a + 1));
@@ -896,6 +905,7 @@
         }
       }
       if (name === "remainder") {
+        this.needNumber(name, args[0]); this.needNumber(name, args[1]);
         const a = Math.trunc(args[0]), b = Math.trunc(args[1]);
         if (b === 0) throw new PlainLangError("You can't take a remainder when dividing by zero.", this.currentLine);
         return a - b * Math.floor(a / b);   // floored remainder, matches Python's %

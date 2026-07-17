@@ -96,6 +96,19 @@ test("numbers & lists toolbox", () => {
   assert.deepStrictEqual(out('say reverse of (list of 1, 2, 3)\nsay reverse of "hi"').output, ["[3, 2, 1]", "ih"]);
   assert.deepStrictEqual(out('say remainder of 17 and 5\nsay remainder of 10 and 5').output, ["2", "0"]);
 });
+test("round/absolute/remainder reject non-numbers with a friendly error", () => {
+  // regression: these used to call Math.round/Math.abs/Math.trunc directly on
+  // the argument, so bad input fell through as NaN/silent instead of erroring
+  assert.ok(/only works with numbers/.test(out('say round of "hi"').error));
+  assert.ok(/only works with numbers/.test(out('say absolute of "hi"').error));
+  assert.ok(/only works with numbers/.test(out('say remainder of "hi" and 2').error));
+});
+test("error line survives a function call", () => {
+  // regression: an error later in the same expression as a function call used
+  // to be blamed on a line inside the function body, not the real call site
+  const r = out('define double with n\nreturn n multiplied by 2\nend\nsay (double with 5) plus (remainder of 1 and 0)');
+  assert.ok(/line 4/.test(r.error), r.error);
+});
 test("pattern matching", () => {
   const m = 'match n\nwhen 1 then\nsay "one"\nwhen 2 then\nsay "two"\notherwise\nsay "many"\nend';
   assert.deepStrictEqual(out('set n to 1\n' + m).output, ["one"]);

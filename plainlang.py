@@ -1021,10 +1021,13 @@ class Interpreter:
         local = Environment(self.globals)
         for p, a in zip(fn.params, arg_exprs):
             local.vars[p] = self.eval(a, env)
+        caller_line = self.current_line
         try:
             self.exec_block(fn.body, local)
         except ReturnSignal as r:
             return r.value
+        finally:
+            self.current_line = caller_line
         return None
 
     def _need_list_fn(self, fn, seq, name):
@@ -1042,10 +1045,13 @@ class Interpreter:
         local = Environment(self.globals)
         for p, a in zip(fn.params, args):
             local.vars[p] = a
+        caller_line = self.current_line
         try:
             self.exec_block(fn.body, local)
         except ReturnSignal as r:
             return r.value
+        finally:
+            self.current_line = caller_line
         return None
 
     # — expression evaluation —
@@ -1166,10 +1172,13 @@ class Interpreter:
 
     def _need_numbers(self, opname, a, b):
         for v in (a, b):
-            if not isinstance(v, (int, float)) or isinstance(v, bool):
-                raise PlainLangError(
-                    f"'{opname}' only works with numbers, "
-                    f"but I got {self._type_name(v)}.", self.current_line)
+            self._need_number(opname, v)
+
+    def _need_number(self, opname, v):
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            raise PlainLangError(
+                f"'{opname}' only works with numbers, "
+                f"but I got {self._type_name(v)}.", self.current_line)
 
     def _compare(self, op, a, b):
         try:
@@ -1218,10 +1227,11 @@ class Interpreter:
                 return part in container
             return self.to_str(part) in self.to_str(container)
         if name == "round":
-            return round(args[0])
+            self._need_number(name, args[0]); return round(args[0])
         if name == "absolute":
-            return abs(args[0])
+            self._need_number(name, args[0]); return abs(args[0])
         if name == "sqrt":
+            self._need_number(name, args[0])
             if args[0] < 0:
                 raise PlainLangError(
                     "I can't take the square root of a negative number.",
@@ -1229,6 +1239,7 @@ class Interpreter:
             r = math.sqrt(args[0])
             return int(r) if r == int(r) else r
         if name == "random":
+            self._need_number(name, args[0]); self._need_number(name, args[1])
             low, high = int(args[0]), int(args[1])
             return random.randint(min(low, high), max(low, high))
         # — numbers & lists toolbox —
@@ -1261,6 +1272,7 @@ class Interpreter:
                 except TypeError:
                     raise PlainLangError("I can only sort a list of all numbers or all text.", self.current_line)
         if name == "remainder":
+            self._need_number(name, args[0]); self._need_number(name, args[1])
             a, b = int(args[0]), int(args[1])
             if b == 0:
                 raise PlainLangError("You can't take a remainder when dividing by zero.", self.current_line)
