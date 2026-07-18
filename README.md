@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 299 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 325 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -40,6 +40,8 @@ run one step at a time.
 | **`test_js.js`** | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
 | **`fuzz.py`** | A **differential fuzzer** — a type-aware generator emits random programs across the whole language and checks the tree-walker and VM agree on every one. |
 | **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
+| **`plainfmt.py`** | A **code formatter** — re-indents a program from its block structure and normalizes whitespace, like gofmt/prettier. `--write` formats in place, `--check` fails CI on unformatted files. |
+| **`test_fmt.py`** | Tests the formatter for the two properties that matter: it never changes what a program does, and formatting an already-formatted program is a no-op. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 
 ---
@@ -322,6 +324,23 @@ anything it can't determine as *unknown* and never complaining about it. So
 `set age to "twelve"` followed by `if age is at least 18` is caught before running —
 *"I can't compare some text with a number"* — but a function parameter whose type isn't
 known is never second-guessed.
+
+### Keeping code consistent
+
+`plainfmt.py` re-indents a program from its block structure and normalizes whitespace —
+one canonical layout, so every file in a project looks the same no matter who wrote it:
+
+```
+$ python plainfmt.py program.plang            # print the formatted result
+$ python plainfmt.py --write program.plang    # format the file in place
+$ python plainfmt.py --check program.plang    # exit 1 if it isn't formatted (for CI)
+```
+
+It's held to the two properties that matter for a formatter: it never changes what a
+program *does* (every program in `test_fmt.py` is run before and after formatting and
+must produce identical output), and formatting an already-formatted file is a no-op
+(idempotence). `demo.plang` was written by hand and happens to already match the
+formatter's output byte-for-byte.
 
 ---
 

@@ -60,7 +60,7 @@ The artifacts that prove engineering maturity:
 
 - [ ] A **Language Server (LSP)**: autocomplete, hover, go-to-definition, live diagnostics
 - [ ] A **VS Code extension** wired to the language server
-- [ ] A **code formatter** (`plainfmt`, like gofmt/prettier)
+- [x] A **code formatter** (`plainfmt`, like gofmt/prettier) — re-indents from block structure, normalizes whitespace, tested for both idempotence and that it never changes a program's output; wired into CI
 - [ ] **CI/CD** with GitHub Actions running every test suite on each push (green badge)
 - [x] A **differential fuzzer** — random programs run through both engines and asserted to agree; already found and fixed a real codegen bug (nested `count` loops reusing a variable). Wired into CI.
 - [ ] Release **v0.4**
