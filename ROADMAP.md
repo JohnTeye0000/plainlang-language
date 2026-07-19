@@ -37,7 +37,8 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] Pattern matching (`match ... when ...`) — *done across all engines, cross-validated; transpiles to a JS switch*
 - [x] A **text/string library**: split, join, trim, replace, position, contains — *done across all engines, cross-validated*
 - [x] Numbers & lists toolbox: sum, average, smallest, largest, first, last, reverse, sorted, remainder — *done across all engines, cross-validated*
-- [ ] More standard library: dates, more math
+- [x] More math: `floor`, `ceiling`, `power`, `min`, `max` — cross-validated across all three engines; also fixed a real equality-semantics bug the fuzzer found along the way (`is equal to` between mismatched types incorrectly raised, and JS compared lists/records by reference instead of value)
+- [ ] More standard library: dates
 - [ ] Modules / multi-file (CLI-focused — browser has no filesystem)
 - [ ] Modules / imports — multi-file programs
 - [ ] Release **v0.2**

@@ -37,6 +37,7 @@ _TYPE_PHRASE = {"number": "a number", "text": "some text", "bool": "true/false",
 _BUILTIN_RETURN = {
     "length": "number", "position": "number", "round": "number", "absolute": "number",
     "sqrt": "number", "random": "number", "remainder": "number", "sum": "number", "average": "number",
+    "floor": "number", "ceiling": "number", "power": "number", "min": "number", "max": "number",
     "uppercase": "text", "lowercase": "text", "trim": "text", "replace": "text", "join": "text",
     "split": "list", "keys": "list", "sorted": "list", "contains": "bool",
     # smallest/largest/first/last (element type) and reverse (list or text) -> None
@@ -366,7 +367,7 @@ class Analyzer:
         if not self._definite(t0):
             return
         display = _BUILTIN_DISPLAY.get(name, name)
-        if name in ("round", "absolute", "sqrt") and t0 != "number":
+        if name in ("round", "absolute", "sqrt", "floor", "ceiling") and t0 != "number":
             self.error(f"'{display} of' needs a number, but got {_TYPE_PHRASE[t0]}.", line)
         elif name in ("sum", "average", "smallest", "largest", "first", "last", "sorted") and t0 != "list":
             self.error(f"'{display} of' needs a list, but got {_TYPE_PHRASE[t0]}.", line)

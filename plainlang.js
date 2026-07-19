@@ -112,6 +112,7 @@
     "split", "join", "trim", "replace", "position", "contains",
     "match", "when",
     "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted", "remainder",
+    "floor", "ceiling", "power", "min", "max",
     // turtle vocabulary
     "move", "forward", "backward", "back", "turn", "left", "right",
     "pen", "up", "down", "color", "wait",
@@ -178,7 +179,8 @@
   const STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
     "for", "define", "call", "return", "add", "remove", "move", "turn", "pen"];
   const VALUE_START_KW = new Set(["true", "false", "empty", "list", "item", "length",
-    "uppercase", "lowercase", "round", "absolute", "square", "random", "minus"]);
+    "uppercase", "lowercase", "round", "absolute", "square", "random", "minus",
+    "floor", "ceiling", "power", "min", "max"]);
 
   class Parser {
     constructor(tokens) { this.t = tokens; this.p = 0; }
@@ -499,11 +501,14 @@
       if (this.isKw("reduce")) { this.advance(); const fn = this.comparison(); this.eatKw("over"); const seq = this.comparison(); this.eatKw("from"); return ["reduce", fn, seq, this.comparison()]; }
       if (this.isKw("item")) { this.advance(); const idx = this.expression(); this.eatKw("of"); const seq = this.primary(); return ["index", seq, idx]; }
       if (this.isKw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim",
-                    "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted")) {
+                    "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted",
+                    "floor", "ceiling")) {
         const name = this.advance()[1]; this.eatKw("of"); return ["builtin", name, [this.primary()]];
       }
       if (this.isKw("square")) { this.advance(); this.eatKw("root"); this.eatKw("of"); return ["builtin", "sqrt", [this.primary()]]; }
-      if (this.isKw("remainder")) { this.advance(); this.eatKw("of"); const a = this.arith(); this.eatKw("and"); return ["builtin", "remainder", [a, this.arith()]]; }
+      if (this.isKw("remainder", "power", "min", "max")) {
+        const name = this.advance()[1]; this.eatKw("of"); const a = this.arith(); this.eatKw("and"); return ["builtin", name, [a, this.arith()]];
+      }
       if (this.isKw("random")) { this.advance(); this.eatKw("between"); const lo = this.arith(); this.eatKw("and"); const hi = this.arith(); return ["builtin", "random", [lo, hi]]; }
       if (this.isKw("split")) { this.advance(); const t = this.comparison(); this.eatKw("by"); return ["builtin", "split", [t, this.comparison()]]; }
       if (this.isKw("join")) { this.advance(); const s = this.comparison(); this.eatKw("by"); return ["builtin", "join", [s, this.comparison()]]; }
@@ -827,9 +832,14 @@
         throw new PlainLangError(`'${name}' only works with numbers, but I got ${typeName(v)}.`, this.currentLine);
     }
     compare(op, a, b) {
+      // equality is always well-defined, even across types (it's simply 'no') —
+      // only ordering needs same-shaped operands, so only it can raise
+      if (op === "==") return deepEqual(a, b);
+      if (op === "!=") return !deepEqual(a, b);
+      const ca = compareCategory(a), cb = compareCategory(b);
+      const orderable = ca === cb && ca !== "record" && ca !== "function" && ca !== "none";
+      if (!orderable) throw new PlainLangError(`I can't compare ${typeName(a)} with ${typeName(b)}.`, this.currentLine);
       switch (op) {
-        case "==": return a === b;
-        case "!=": return a !== b;
         case ">": return a > b;
         case "<": return a < b;
         case ">=": return a >= b;
@@ -866,6 +876,14 @@
       }
       if (name === "round") { this.needNumber(name, args[0]); return Math.round(args[0]); }
       if (name === "absolute") { this.needNumber(name, args[0]); return Math.abs(args[0]); }
+      if (name === "floor") { this.needNumber(name, args[0]); return Math.floor(args[0]); }
+      if (name === "ceiling") { this.needNumber(name, args[0]); return Math.ceil(args[0]); }
+      if (name === "power") {
+        this.needNumber(name, args[0]); this.needNumber(name, args[1]);
+        return Math.pow(args[0], args[1]);
+      }
+      if (name === "min") { this.needNumber(name, args[0]); this.needNumber(name, args[1]); return Math.min(args[0], args[1]); }
+      if (name === "max") { this.needNumber(name, args[0]); this.needNumber(name, args[1]); return Math.max(args[0], args[1]); }
       if (name === "sqrt") {
         this.needNumber(name, args[0]);
         if (args[0] < 0) throw new PlainLangError("I can't take the square root of a negative number.", this.currentLine);
@@ -948,6 +966,28 @@
     if (Array.isArray(v)) return "a list";
     if (isDict(v)) return "a record";
     return "nothing";
+  }
+  function compareCategory(v) {
+    // mirrors what Python considers orderable together: numbers (bool included,
+    // since Python's bool is an int subtype), text, and lists compare within
+    // their own category; records and functions never order (Python raises
+    // TypeError on dict > dict / function > function, same as mismatched types).
+    if (typeof v === "number" || typeof v === "boolean") return "number";
+    if (typeof v === "string") return "text";
+    if (Array.isArray(v)) return "list";
+    if (isDict(v)) return "record";
+    if (isPlFn(v)) return "function";
+    return "none";
+  }
+  function deepEqual(a, b) {
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return a.length === b.length && a.every((x, i) => deepEqual(x, b[i]));
+    }
+    if (isDict(a) && isDict(b)) {
+      const ka = Object.keys(a), kb = Object.keys(b);
+      return ka.length === kb.length && ka.every((k) => k in b && deepEqual(a[k], b[k]));
+    }
+    return a === b;
   }
 
   // ─── Compiler: PlainLang → JavaScript ──────────────────────────────────────
@@ -1137,6 +1177,11 @@
           case "reverse":   return `[...${a[0]}].reverse()`;
           case "sorted":    return `[...${a[0]}].sort((x, y) => x - y)`;
           case "remainder": return `(${a[0]} % ${a[1]})`;
+          case "floor":     return `Math.floor(${a[0]})`;
+          case "ceiling":   return `Math.ceil(${a[0]})`;
+          case "power":     return `Math.pow(${a[0]}, ${a[1]})`;
+          case "min":       return `Math.min(${a[0]}, ${a[1]})`;
+          case "max":       return `Math.max(${a[0]}, ${a[1]})`;
         }
       }
       return "/* ? */";

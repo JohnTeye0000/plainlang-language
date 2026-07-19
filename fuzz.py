@@ -97,7 +97,8 @@ class Generator:
             if shallow:
                 vs = self.vars_of("number")
                 return r.choice(vs) if vs and r.random() < 0.5 else str(r.randint(-5, 20))
-            c = r.choice(["op", "op", "length", "sum", "remainder", "round", "first", "call", "reduce"])
+            c = r.choice(["op", "op", "length", "sum", "remainder", "round", "first", "call", "reduce",
+                          "floor", "power", "minmax"])
             e = lambda t: self.expr(t, depth + 1)
             if c == "op":
                 op = "divided by" if r.random() < 0.12 else r.choice(self.NUM_OPS)
@@ -109,6 +110,9 @@ class Generator:
             if c == "first":     return f"(first of {e('list')})"
             if c == "call":      return f"(double with {e('number')})"
             if c == "reduce":    return f"(reduce add2 over {e('list')} from {e('number')})"
+            if c == "floor":     return f"({r.choice(['floor', 'ceiling'])} of {e('number')})"
+            if c == "power":     return f"(power of {e('number')} and {r.randint(0, 4)})"
+            if c == "minmax":    return f"({r.choice(['min', 'max'])} of {e('number')} and {e('number')})"
         if typ == "text":
             if shallow:
                 vs = self.vars_of("text")

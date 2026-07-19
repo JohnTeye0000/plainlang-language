@@ -871,9 +871,10 @@ class VM:
             raise PlainLangError(f"'{name}' only works with numbers, but I got {type_name(v)}.", self.line)
 
     def compare(self, op, a, b):
+        # only called for ordering ops (EQ/NE take the native fast path and never
+        # raise — equality is well-defined even across types, it's simply 'no')
         try:
-            return {"EQ": a == b, "NE": a != b, "GT": a > b,
-                    "LT": a < b, "GE": a >= b, "LE": a <= b}[op]
+            return {"GT": a > b, "LT": a < b, "GE": a >= b, "LE": a <= b}[op]
         except TypeError:
             raise PlainLangError(f"I can't compare {type_name(a)} with {type_name(b)}.", self.line)
 
@@ -922,6 +923,18 @@ class VM:
             return to_str(args[1]) in to_str(args[0])
         if name == "round":     self.need_number(name, args[0]); return round(args[0])
         if name == "absolute":  self.need_number(name, args[0]); return abs(args[0])
+        if name == "floor":     self.need_number(name, args[0]); return math.floor(args[0])
+        if name == "ceiling":   self.need_number(name, args[0]); return math.ceil(args[0])
+        if name == "power":
+            self.need_number(name, args[0]); self.need_number(name, args[1])
+            r = args[0] ** args[1]
+            return int(r) if isinstance(r, float) and r == int(r) else r
+        if name == "min":
+            self.need_number(name, args[0]); self.need_number(name, args[1])
+            return min(args[0], args[1])
+        if name == "max":
+            self.need_number(name, args[0]); self.need_number(name, args[1])
+            return max(args[0], args[1])
         if name == "sqrt":
             self.need_number(name, args[0])
             if args[0] < 0:

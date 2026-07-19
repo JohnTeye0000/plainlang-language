@@ -71,6 +71,19 @@ PROGRAMS = {
     "round rejects text": 'say round of "hi"',
     "absolute rejects text": 'say absolute of "hi"',
     "remainder rejects text": 'say remainder of "hi" and 2',
+    "floor and ceiling": 'say floor of 3.7\nsay ceiling of 3.2\nsay floor of (minus 3.2)\nsay ceiling of (minus 3.7)',
+    "power": 'say power of 2 and 10\nsay power of 5 and 0',
+    "min and max": 'say min of 4 and 9\nsay max of 4 and 9\nsay min of 9 and 4',
+    "power rejects text": 'say power of "hi" and 2',
+    # regression: EQ/NE between incompatible types must never raise (equality is
+    # always well-defined), only ordering ops require matching operand shapes
+    "equality never errors across types": 'say 16 is equal to "hi"\nsay 16 is not equal to "hi"',
+    "structural equality for lists and records":
+        'set a to list of 1, 2\nset b to list of 1, 2\nsay a is equal to b\n'
+        'set p to record with "x" as 1\nset q to record with "x" as 1\nsay p is equal to q',
+    "ordering still rejects incompatible types": 'say 5 is greater than "five"',
+    "match subject/case type mismatch never errors":
+        'match "hi"\nwhen 1 then\nsay "num"\notherwise\nsay "other"\nend',
     "stop exits loop": 'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend',
     "skip next pass": 'count i from 1 to 6\nif i is equal to 3 then\nskip\nend\nsay i\nend',
     "skip in while advances": 'set x to 0\nwhile x is less than 5\nset x to x plus 1\nif x is equal to 2 then\nskip\nend\nsay x\nend',

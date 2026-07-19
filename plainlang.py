@@ -158,6 +158,7 @@ KEYWORDS = {
     "and", "or", "true", "false",
     "length", "uppercase", "lowercase", "round", "absolute",
     "square", "root", "random", "between",
+    "floor", "ceiling", "power", "min", "max",
     "record", "as", "keys",
     "stop", "skip",
     "map", "filter", "reduce", "over",
@@ -487,7 +488,7 @@ class Parser:
     # tokens that can begin a value (so we can tell a real call from a typo)
     _VALUE_START_KW = {"true", "false", "empty", "list", "item", "length",
                        "uppercase", "lowercase", "round", "absolute", "square",
-                       "random", "minus"}
+                       "random", "minus", "floor", "ceiling", "power", "min", "max"}
     _STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
                      "for", "define", "call", "return", "add", "remove"]
 
@@ -726,17 +727,19 @@ class Parser:
 
         # built-in functions (single argument:  NAME of X)
         if self.is_kw("length", "uppercase", "lowercase", "round", "absolute", "keys", "trim",
-                      "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted"):
+                      "sum", "average", "smallest", "largest", "first", "last", "reverse", "sorted",
+                      "floor", "ceiling"):
             name = self.advance()[1]
             self.eat_kw("of")
             return ("builtin", name, [self.primary()])
         if self.is_kw("square"):
             self.advance(); self.eat_kw("root"); self.eat_kw("of")
             return ("builtin", "sqrt", [self.primary()])
-        if self.is_kw("remainder"):          # remainder of A and B
-            self.advance(); self.eat_kw("of")
+        if self.is_kw("remainder", "power", "min", "max"):  # e.g. remainder of A and B
+            name = self.advance()[1]
+            self.eat_kw("of")
             a = self.arith(); self.eat_kw("and")
-            return ("builtin", "remainder", [a, self.arith()])
+            return ("builtin", name, [a, self.arith()])
         # text helpers
         if self.is_kw("split"):              # split TEXT by SEP
             self.advance(); text = self.comparison(); self.eat_kw("by")
@@ -1181,9 +1184,12 @@ class Interpreter:
                 f"but I got {self._type_name(v)}.", self.current_line)
 
     def _compare(self, op, a, b):
+        # equality is always well-defined, even across types (it's simply 'no') —
+        # only ordering needs same-shaped operands, so only it can raise
+        if op == "==": return a == b
+        if op == "!=": return a != b
         try:
-            return {"==": a == b, "!=": a != b,
-                    ">": a > b, "<": a < b, ">=": a >= b, "<=": a <= b}[op]
+            return {">": a > b, "<": a < b, ">=": a >= b, "<=": a <= b}[op]
         except TypeError:
             raise PlainLangError(
                 f"I can't compare {self._type_name(a)} with {self._type_name(b)}.",
@@ -1230,6 +1236,20 @@ class Interpreter:
             self._need_number(name, args[0]); return round(args[0])
         if name == "absolute":
             self._need_number(name, args[0]); return abs(args[0])
+        if name == "floor":
+            self._need_number(name, args[0]); return math.floor(args[0])
+        if name == "ceiling":
+            self._need_number(name, args[0]); return math.ceil(args[0])
+        if name == "power":
+            self._need_number(name, args[0]); self._need_number(name, args[1])
+            r = args[0] ** args[1]
+            return int(r) if isinstance(r, float) and r == int(r) else r
+        if name == "min":
+            self._need_number(name, args[0]); self._need_number(name, args[1])
+            return min(args[0], args[1])
+        if name == "max":
+            self._need_number(name, args[0]); self._need_number(name, args[1])
+            return max(args[0], args[1])
         if name == "sqrt":
             self._need_number(name, args[0])
             if args[0] < 0:
@@ -1383,6 +1403,9 @@ FUNCTIONS
 BUILT-IN HELPERS
   length of X        uppercase of X     lowercase of X
   round of X         absolute of X      square root of X
+  floor of X         ceiling of X
+  power of X and Y   min of X and Y     max of X and Y
+  remainder of X and Y
   random between 1 and 6
 """
 

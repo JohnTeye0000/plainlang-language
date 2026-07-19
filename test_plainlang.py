@@ -78,6 +78,17 @@ expect_output("greater than", 'if 5 is greater than 3 then\nsay "y"\nend', ["y"]
 expect_output("at least (>=)", 'if 5 is at least 5 then\nsay "y"\nend', ["y"])
 expect_output("at most (<=)", 'if 4 is at most 3 then\nsay "n"\notherwise\nsay "y"\nend', ["y"])
 expect_output("is not equal", 'if 4 is not equal to 5 then\nsay "y"\nend', ["y"])
+# regression: 'is equal to'/'is not equal to' between incompatible types used to
+# raise (an accident of the original implementation), but equality is always
+# well-defined -- it's simply false across types, like Python's own '=='
+expect_output("equality never errors across types",
+    'say 16 is equal to "hi"\nsay 16 is not equal to "hi"', ["false", "true"])
+expect_output("structural equality for lists and records",
+    'set a to list of 1, 2\nset b to list of 1, 2\nsay a is equal to b\n'
+    'set p to record with "x" as 1\nset q to record with "x" as 1\nsay p is equal to q',
+    ["true", "true"])
+expect_error("ordering still rejects incompatible types",
+    'say 5 is greater than "five"', "I can't compare")
 expect_output("and", 'if true and false then\nsay "n"\notherwise\nsay "y"\nend', ["y"])
 expect_output("or", 'if false or true then\nsay "y"\nend', ["y"])
 expect_output("not", 'if not false then\nsay "y"\nend', ["y"])
@@ -225,6 +236,13 @@ expect_output("round", 'say round of 3.7', ["4"])
 expect_output("absolute", 'say absolute of (minus 8)', ["8"])
 expect_output("square root", 'say square root of 144', ["12"])
 expect_output("length of text", 'say length of "hello"', ["5"])
+expect_output("floor", 'say floor of 3.7\nsay floor of (minus 3.2)', ["3", "-4"])
+expect_output("ceiling", 'say ceiling of 3.2\nsay ceiling of (minus 3.7)', ["4", "-3"])
+expect_output("power", 'say power of 2 and 10', ["1024"])
+expect_output("min", 'say min of 4 and 9\nsay min of 9 and 4', ["4", "4"])
+expect_output("max", 'say max of 4 and 9\nsay max of 9 and 4', ["9", "9"])
+expect_error("floor rejects text", 'say floor of "hi"', "only works with numbers")
+expect_error("power rejects text", 'say power of "hi" and 2', "only works with numbers")
 
 # ── input ─────────────────────────────────────────────────────────────────────
 print("Input")

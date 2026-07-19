@@ -96,6 +96,27 @@ test("numbers & lists toolbox", () => {
   assert.deepStrictEqual(out('say reverse of (list of 1, 2, 3)\nsay reverse of "hi"').output, ["[3, 2, 1]", "ih"]);
   assert.deepStrictEqual(out('say remainder of 17 and 5\nsay remainder of 10 and 5').output, ["2", "0"]);
 });
+test("equality never errors across types, ordering still does", () => {
+  // regression: compare() previously never checked types at all (no error for
+  // 'is greater than' on mismatched types) AND used reference equality for
+  // lists/records (structurally-identical lists compared unequal)
+  assert.deepStrictEqual(out('say 16 is equal to "hi"\nsay 16 is not equal to "hi"').output, ["false", "true"]);
+  assert.deepStrictEqual(
+    out('set a to list of 1, 2\nset b to list of 1, 2\nsay a is equal to b\n' +
+        'set p to record with "x" as 1\nset q to record with "x" as 1\nsay p is equal to q').output,
+    ["true", "true"]);
+  assert.ok(/can't compare/.test(out('say 5 is greater than "five"').error));
+});
+test("more math: floor, ceiling, power, min, max", () => {
+  const r = out('say floor of 3.7\nsay ceiling of 3.2\nsay floor of (minus 3.2)\nsay ceiling of (minus 3.7)\nsay power of 2 and 10\nsay min of 4 and 9\nsay max of 4 and 9');
+  assert.deepStrictEqual(r.output, ["3", "4", "-4", "-3", "1024", "4", "9"]);
+});
+test("more math transpiles to native JS", () => {
+  const js = PL.compile('say power of 2 and 10\nsay min of 4 and 9\nsay floor of 3.7');
+  assert.ok(js.includes("Math.pow(2, 10)"));
+  assert.ok(js.includes("Math.min(4, 9)"));
+  assert.ok(js.includes("Math.floor(3.7)"));
+});
 test("round/absolute/remainder reject non-numbers with a friendly error", () => {
   // regression: these used to call Math.round/Math.abs/Math.trunc directly on
   // the argument, so bad input fell through as NaN/silent instead of erroring

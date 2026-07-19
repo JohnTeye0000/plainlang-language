@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 325 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 346 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -154,6 +154,7 @@ say map double over (list of 1, 2, 3)              # [2, 4, 6]
 say reduce combine over (list of 1, 2, 3, 4) from 0   # 10
 
 # Built-ins:  length of · uppercase of · round of · square root of · random between 1 and 6
+# More math:  floor of · ceiling of · power of X and Y · min of X and Y · max of X and Y
 
 # Numbers & lists toolbox
 say sum of (list of 5, 2, 8)       # 15
@@ -237,6 +238,14 @@ checked for identical output on both engines. This has found real bugs twice:
    sweep also caught `round`/`absolute`/`sqrt`/`random`/`remainder` calling straight into
    `int()`/`round()` without checking their argument was a number first, so bad input raised
    a raw crash instead of a friendly error — now they all validate first.
+3. Adding `power`/`min`/`max` surfaced a real semantics bug in `is equal to`/`is not equal
+   to`: the tree-walker built a dict of all six comparison results at once to pick the right
+   one, so an *ordering* comparison between incompatible types (`5 > "five"`) threw before
+   the requested `==` was ever read — meaning equality checks between mismatched types
+   raised instead of just being `false`, and the JS engine additionally compared lists and
+   records by reference instead of by value. Fixed everywhere: equality is now always
+   well-defined across types (like Python's own `==`), only ordering requires matching
+   operand shapes, and list/record equality is structural in all three engines.
 
 Now 20,000+ random programs across the full language agree.
 
