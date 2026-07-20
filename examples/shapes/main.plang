@@ -1,0 +1,5 @@
+import "geometry.plang"
+
+say "Circle (r=4): " plus (round of (area_of_circle with 4))
+say "Rectangle (3x5) area: " plus (area_of_rectangle with 3 and 5)
+say "Rectangle (3x5) perimeter: " plus (perimeter_of_rectangle with 3 and 5)

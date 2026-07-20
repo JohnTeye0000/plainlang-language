@@ -25,6 +25,7 @@ See syntax:   python plainlang.py --help
 """
 
 import sys
+import os
 import re
 import math
 import random
@@ -151,7 +152,7 @@ KEYWORDS = {
     "set", "to", "say", "ask", "into",
     "if", "then", "otherwise", "end",
     "repeat", "times", "while", "count", "from", "for", "each", "in",
-    "define", "with", "call", "return",
+    "define", "with", "call", "return", "import",
     "list", "of", "empty", "add", "remove", "item",
     "plus", "minus", "multiplied", "divided", "by",
     "is", "not", "greater", "less", "than", "equal", "at", "least", "most",
@@ -215,7 +216,8 @@ BLOCK_ENDERS = {"end", "otherwise", "when"}
 
 
 _STATEMENT_STARTERS = {"set", "say", "ask", "if", "match", "repeat", "while", "count",
-                       "for", "define", "call", "return", "add", "remove", "stop", "skip"}
+                       "for", "define", "call", "return", "add", "remove", "stop", "skip",
+                       "import"}
 
 
 class Parser:
@@ -330,6 +332,7 @@ class Parser:
         if self.is_kw("count"):   return self.count_stmt()
         if self.is_kw("for"):     return self.foreach_stmt()
         if self.is_kw("define"):  return self.define_stmt()
+        if self.is_kw("import"):  return self.import_stmt()
         if self.is_kw("call"):    return self.call_stmt()
         if self.is_kw("return"):  return self.return_stmt()
         if self.is_kw("add"):     return self.add_stmt()
@@ -348,7 +351,7 @@ class Parser:
         hint = "Statements begin with words like set, say, if, repeat, for, or define."
         if t[0] == "IDENT":
             s = suggest(t[1], ["set", "say", "ask", "if", "repeat", "while",
-                               "count", "for", "define", "call", "return", "add", "remove"])
+                               "count", "for", "define", "call", "return", "add", "remove", "import"])
             if s:
                 hint = f"Did you mean '{s}'?"
         raise PlainLangError(
@@ -485,12 +488,20 @@ class Parser:
         self.eat_kw("end")
         return ("define", name, params, body)
 
+    def import_stmt(self):
+        # import "utils.plang" — pulls in another file's function definitions.
+        # Resolved before a program runs (see load_program); the interpreter
+        # never actually sees this node.
+        self.eat_kw("import")
+        path = self.eat("STRING", "a file name in quotes")[1]
+        return ("import", path)
+
     # tokens that can begin a value (so we can tell a real call from a typo)
     _VALUE_START_KW = {"true", "false", "empty", "list", "item", "length",
                        "uppercase", "lowercase", "round", "absolute", "square",
                        "random", "minus", "floor", "ceiling", "power", "min", "max"}
     _STATEMENT_KW = ["set", "say", "ask", "if", "repeat", "while", "count",
-                     "for", "define", "call", "return", "add", "remove"]
+                     "for", "define", "call", "return", "add", "remove", "import"]
 
     def call_stmt(self):
         if self.is_kw("call"):
@@ -948,6 +959,11 @@ class Interpreter:
             _, name, params, body = node
             self.functions[name] = PlainFunction(name, params, body)
 
+        elif op == "import":
+            raise PlainLangError(
+                "'import' only works when a program is run from a file "
+                "(python plainlang.py yourfile.plang), not from a string or the REPL.")
+
         elif op == "call":
             self.call_function(node[1], node[2], env)
 
@@ -1400,6 +1416,11 @@ FUNCTIONS
   say double with 21          # used as a value
   call greet with "Bob"       # called as an action
 
+MODULES  (running a file from the command line only)
+  import "utils.plang"        # pulls in another file's functions
+  A file you import may only contain function definitions -- it's a
+  library, not a second program.
+
 BUILT-IN HELPERS
   length of X        uppercase of X     lowercase of X
   round of X         absolute of X      square root of X
@@ -1420,6 +1441,49 @@ def parse_all(tokens):
     p.recovering = True
     tree = p.parse()
     return tree, p.errors
+
+
+def load_program(path, _stack=None):
+    """Read a .plang file from disk and resolve its 'import' statements into
+    function definitions, recursively. An imported file may only contain
+    function definitions -- it's a library, not a second program to run.
+    Returns a fully-linked ('block', stmts) tree with no 'import' nodes left.
+    """
+    path = os.path.abspath(path)
+    stack = _stack or []
+    is_root = _stack is None
+    if path in stack:
+        chain = " -> ".join(os.path.basename(p) for p in stack + [path])
+        raise PlainLangError(f"Circular import: {chain}")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            source = f.read()
+    except FileNotFoundError:
+        raise PlainLangError(f"I couldn't find the file to import: '{os.path.basename(path)}'.")
+    tokens = tokenize(source)
+    tree, errors = parse_all(tokens)
+    if errors:
+        if is_root:
+            raise errors[0]
+        e = errors[0]
+        loc = f" on line {e.line}" if e.line else ""
+        raise PlainLangError(f"'{os.path.basename(path)}' has a syntax error{loc}: {e.message}")
+
+    base_dir = os.path.dirname(path)
+    merged = []
+    for stmt in tree[1]:
+        inner = stmt[2]
+        if inner[0] != "import":
+            if not is_root and inner[0] != "define":
+                raise PlainLangError(
+                    f"'{os.path.basename(path)}' can't be imported -- imported files "
+                    "may only contain function definitions.")
+            merged.append(stmt)
+            continue
+        import_path = os.path.join(base_dir, inner[1])
+        imported = load_program(import_path, stack + [path])
+        merged.extend(imported[1])
+    return ("block", merged)
 
 
 def run_source(source, on_output=print, on_input=input):
@@ -1452,7 +1516,20 @@ def run_file(path):
     except FileNotFoundError:
         print(f"I couldn't find a file called '{path}'.")
         return
-    run_source(source)
+    try:
+        tree = load_program(path)
+    except PlainLangError as e:
+        print(format_error(source, e))
+        return
+    try:
+        Interpreter().run(tree)
+    except PlainLangError as e:
+        print(format_error(source, e))
+    except (BreakSignal, ContinueSignal):
+        word = "stop" if isinstance(sys.exc_info()[1], BreakSignal) else "skip"
+        print(format_error(source, PlainLangError(f"'{word}' can only be used inside a loop.")))
+    except RecursionError:
+        print("\n  Oops! A function called itself too many times (no stopping point).")
 
 
 def repl():

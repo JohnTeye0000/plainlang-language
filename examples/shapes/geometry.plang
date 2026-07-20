@@ -1,0 +1,11 @@
+define area_of_circle with r
+    return 3.14159 multiplied by (power of r and 2)
+end
+
+define area_of_rectangle with w and h
+    return w multiplied by h
+end
+
+define perimeter_of_rectangle with w and h
+    return 2 multiplied by (w plus h)
+end

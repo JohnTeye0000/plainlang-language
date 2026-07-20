@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 346 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 355 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -42,7 +42,9 @@ run one step at a time.
 | **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
 | **`plainfmt.py`** | A **code formatter** — re-indents a program from its block structure and normalizes whitespace, like gofmt/prettier. `--write` formats in place, `--check` fails CI on unformatted files. |
 | **`test_fmt.py`** | Tests the formatter for the two properties that matter: it never changes what a program does, and formatting an already-formatted program is a no-op. |
+| **`test_imports.py`** | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
+| **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
 ---
 
@@ -155,6 +157,10 @@ say reduce combine over (list of 1, 2, 3, 4) from 0   # 10
 
 # Built-ins:  length of · uppercase of · round of · square root of · random between 1 and 6
 # More math:  floor of · ceiling of · power of X and Y · min of X and Y · max of X and Y
+
+# Multi-file programs (running from the command line)
+import "geometry.plang"                 # pulls in another file's functions
+say area_of_circle with 4               # a library file may only define functions
 
 # Numbers & lists toolbox
 say sum of (list of 5, 2, 8)       # 15

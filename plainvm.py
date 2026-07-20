@@ -555,6 +555,15 @@ def peephole(code):
 def compile_program(source, optimize=True):
     tokens = pl.tokenize(source)
     tree = pl.Parser(tokens).parse()
+    return compile_tree(tree, optimize)
+
+
+def compile_file(path, optimize=True):
+    """Like compile_program, but resolves 'import' statements first."""
+    return compile_tree(pl.load_program(path), optimize)
+
+
+def compile_tree(tree, optimize=True):
     if optimize:
         tree = fold(tree)   # constant-folding optimization pass
 
@@ -1075,6 +1084,20 @@ def run_source(source, on_output=print, on_input=input, rng=None):
         return False, msg
 
 
+def run_file(path, on_output=print, on_input=input, rng=None):
+    """Like run_source, but resolves 'import' statements first."""
+    with open(path, encoding="utf-8") as f:
+        source = f.read()
+    try:
+        program = compile_file(path)
+        VM(program, on_output, on_input, rng).run()
+        return True, None
+    except PlainLangError as e:
+        msg = pl.format_error(source, e)
+        on_output(msg)
+        return False, msg
+
+
 def _trace(path, limit=200):
     """Run a program and print each bytecode step: source line, op, and stack."""
     with open(path, encoding="utf-8") as f:
@@ -1188,7 +1211,6 @@ if __name__ == "__main__":
             print(e.show())
     else:
         try:
-            with open(args[0], encoding="utf-8") as f:
-                run_source(f.read())
+            run_file(args[0])
         except FileNotFoundError:
             print(f"I couldn't find a file called '{args[0]}'.")

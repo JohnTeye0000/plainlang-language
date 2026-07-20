@@ -39,8 +39,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] Numbers & lists toolbox: sum, average, smallest, largest, first, last, reverse, sorted, remainder — *done across all engines, cross-validated*
 - [x] More math: `floor`, `ceiling`, `power`, `min`, `max` — cross-validated across all three engines; also fixed a real equality-semantics bug the fuzzer found along the way (`is equal to` between mismatched types incorrectly raised, and JS compared lists/records by reference instead of value)
 - [ ] More standard library: dates
-- [ ] Modules / multi-file (CLI-focused — browser has no filesystem)
-- [ ] Modules / imports — multi-file programs
+- [x] Modules / imports — `import "utils.plang"` pulls another file's function definitions into the current program (CLI-focused — the browser has no filesystem); resolves transitive and diamond imports, rejects cycles and non-library files, cross-validated between the tree-walker and the VM
 - [ ] Release **v0.2**
 
 ## Phase 2 — A real compiler  *(weeks)*
