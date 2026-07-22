@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 355 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 380 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -43,6 +43,8 @@ run one step at a time.
 | **`plainfmt.py`** | A **code formatter** — re-indents a program from its block structure and normalizes whitespace, like gofmt/prettier. `--write` formats in place, `--check` fails CI on unformatted files. |
 | **`test_fmt.py`** | Tests the formatter for the two properties that matter: it never changes what a program does, and formatting an already-formatted program is a no-op. |
 | **`test_imports.py`** | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
+| **`plainlsp.py`** | A **Language Server** — live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
+| **`test_lsp.py`** | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
@@ -356,6 +358,18 @@ program *does* (every program in `test_fmt.py` is run before and after formattin
 must produce identical output), and formatting an already-formatted file is a no-op
 (idempotence). `demo.plang` was written by hand and happens to already match the
 formatter's output byte-for-byte.
+
+### Editor tooling
+
+`plainlsp.py` is a real **Language Server** — the same protocol pyright, gopls, and
+rust-analyzer speak. Point any LSP-capable editor at `python plainlsp.py` and it gets
+live diagnostics as you type (undefined variables, wrong argument counts, type errors,
+unreachable code, syntax errors — the exact same checks as `plaincheck.py`, with the same
+"did you mean?" suggestions) and hover documentation for keywords. The transport (stdio,
+`Content-Length`-framed JSON-RPC) is a thin shell around a pure `LSPServer.handle()` — one
+dict in, a list of response/notification dicts out — so the whole protocol is tested
+without spawning an editor or even a subprocess, plus one real subprocess test proving the
+actual stdio framing works.
 
 ---
 

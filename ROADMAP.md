@@ -58,7 +58,7 @@ Deepen the back end into something a compilers course would recognize:
 
 The artifacts that prove engineering maturity:
 
-- [ ] A **Language Server (LSP)**: autocomplete, hover, go-to-definition, live diagnostics
+- [x] A **Language Server (LSP)**: `plainlsp.py` — live diagnostics (reusing the static analyzer) and hover, spoken over real LSP stdio framing so any LSP-capable editor can talk to it; autocomplete/go-to-definition still open
 - [ ] A **VS Code extension** wired to the language server
 - [x] A **code formatter** (`plainfmt`, like gofmt/prettier) — re-indents from block structure, normalizes whitespace, tested for both idempotence and that it never changes a program's output; wired into CI
 - [ ] **CI/CD** with GitHub Actions running every test suite on each push (green badge)

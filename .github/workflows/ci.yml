@@ -28,6 +28,8 @@ jobs:
         run: python test_fmt.py
       - name: Multi-file imports
         run: python test_imports.py
+      - name: Language server
+        run: python test_lsp.py
 
   javascript:
     name: JavaScript engine (interpreter, transpiler, diagnostics)
