@@ -59,7 +59,7 @@ Deepen the back end into something a compilers course would recognize:
 The artifacts that prove engineering maturity:
 
 - [x] A **Language Server (LSP)**: `plainlsp.py` — live diagnostics (reusing the static analyzer) and hover, spoken over real LSP stdio framing so any LSP-capable editor can talk to it; autocomplete/go-to-definition still open
-- [ ] A **VS Code extension** wired to the language server
+- [x] A **VS Code extension** (`vscode-extension/`) wired to `plainlsp.py` over stdio — TextMate syntax highlighting, live diagnostics, and hover, no PlainLang-specific logic in the client itself (not yet published to the marketplace, but installable from source)
 - [x] A **code formatter** (`plainfmt`, like gofmt/prettier) — re-indents from block structure, normalizes whitespace, tested for both idempotence and that it never changes a program's output; wired into CI
 - [ ] **CI/CD** with GitHub Actions running every test suite on each push (green badge)
 - [x] A **differential fuzzer** — random programs run through both engines and asserted to agree; already found and fixed a real codegen bug (nested `count` loops reusing a variable). Wired into CI.

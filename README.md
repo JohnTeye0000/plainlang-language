@@ -45,6 +45,7 @@ run one step at a time.
 | **`test_imports.py`** | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
 | **`plainlsp.py`** | A **Language Server** — live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
 | **`test_lsp.py`** | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
+| **`vscode-extension/`** | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
@@ -370,6 +371,13 @@ unreachable code, syntax errors — the exact same checks as `plaincheck.py`, wi
 dict in, a list of response/notification dicts out — so the whole protocol is tested
 without spawning an editor or even a subprocess, plus one real subprocess test proving the
 actual stdio framing works.
+
+`vscode-extension/` is a real VS Code extension wired to it — `syntaxes/plainlang.tmLanguage.json`
+gives `.plang` files syntax highlighting (keywords, strings with `{interpolation}`, numbers,
+comments), and `src/extension.js` is a thin client that starts `python plainlsp.py` and speaks
+LSP to it over stdio via `vscode-languageclient`. The client has no PlainLang-specific logic of
+its own — every diagnostic comes from the same `plaincheck.py` the CLI uses. See its own
+[README](vscode-extension/README.md) for installing it from source.
 
 ---
 

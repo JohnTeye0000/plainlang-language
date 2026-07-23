@@ -1,0 +1,53 @@
+{
+  "name": "plainlang",
+  "displayName": "PlainLang",
+  "description": "Syntax highlighting and live diagnostics for PlainLang, the English-like beginner language.",
+  "version": "0.1.0",
+  "publisher": "plainlang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:plainlang"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "plainlang",
+        "aliases": ["PlainLang", "plainlang"],
+        "extensions": [".plang"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "plainlang",
+        "scopeName": "source.plainlang",
+        "path": "./syntaxes/plainlang.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "PlainLang",
+      "properties": {
+        "plainlang.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Command used to run the Python interpreter (must be able to run plainlsp.py)."
+        },
+        "plainlang.serverPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to plainlsp.py. Leave empty to use the copy bundled with this extension."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "scripts": {
+    "postinstall": "echo Run 'vsce package' to build a .vsix, then 'code --install-extension plainlang-0.1.0.vsix' to install it."
+  }
+}

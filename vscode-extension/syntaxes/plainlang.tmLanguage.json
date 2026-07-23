@@ -1,0 +1,116 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "PlainLang",
+  "scopeName": "source.plainlang",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#function-definition" },
+    { "include": "#control-keywords" },
+    { "include": "#operator-words" },
+    { "include": "#constants" },
+    { "include": "#builtin-functions" },
+    { "include": "#storage-keywords" },
+    { "include": "#turtle-keywords" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.plainlang",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.plainlang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "meta.interpolation.plainlang",
+              "match": "\\{[^{}]*\\}"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.plainlang",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "function-definition": {
+      "patterns": [
+        {
+          "match": "\\b(define)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.plainlang" },
+            "2": { "name": "entity.name.function.plainlang" }
+          }
+        },
+        {
+          "match": "\\b(call)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.plainlang" },
+            "2": { "name": "entity.name.function.plainlang" }
+          }
+        }
+      ]
+    },
+    "control-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.plainlang",
+          "match": "\\b(if|then|otherwise|end|while|count|repeat|times|for|each|in|from|to|match|when|define|with|return|import|stop|skip)\\b"
+        }
+      ]
+    },
+    "operator-words": {
+      "patterns": [
+        {
+          "name": "keyword.operator.word.plainlang",
+          "match": "\\b(plus|minus|multiplied|divided|by|is|not|greater|less|than|equal|at|least|most|and|or)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.plainlang",
+          "match": "\\b(true|false|empty|nothing)\\b"
+        }
+      ]
+    },
+    "storage-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.plainlang",
+          "match": "\\b(set|ask|into|add|remove|item|list|of|record|as|keys)\\b"
+        }
+      ]
+    },
+    "builtin-functions": {
+      "patterns": [
+        {
+          "name": "support.function.plainlang",
+          "match": "\\b(length|uppercase|lowercase|round|absolute|square|root|random|between|floor|ceiling|power|min|max|sum|average|smallest|largest|first|last|reverse|sorted|remainder|split|join|trim|replace|position|contains|map|filter|reduce|over)\\b"
+        }
+      ]
+    },
+    "turtle-keywords": {
+      "patterns": [
+        {
+          "name": "support.function.turtle.plainlang",
+          "match": "\\b(move|forward|backward|back|turn|left|right|pen|up|down|color|wait)\\b"
+        }
+      ]
+    }
+  }
+}
