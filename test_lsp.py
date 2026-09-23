@@ -104,6 +104,63 @@ check("an unknown request still gets a reply (never hangs the client)",
       resp == [{"jsonrpc": "2.0", "id": 9, "result": None}], resp)
 
 
+
+# ── navigation: symbols, definition, completion, richer hover ──────────────
+print("navigation")
+
+NAV = 'define double with n
+    return n multiplied by 2
+end
+set total to 0
+count i from 1 to 3
+    set total to total plus double with i
+end
+'
+syms = lsp.document_symbols(NAV)
+check("document symbols list functions and variables",
+      [(s["name"], s["kind"]) for s in syms] == [("double", 12), ("total", 13), ("i", 13)], syms)
+check("function symbol carries its signature", syms[0]["detail"] == "with n", syms[0])
+
+idx = lsp.index_document("define f with a and b
+return a
+end")
+check("index captures parameters", idx["functions"]["f"]["params"] == ["a", "b"], idx)
+check("index survives a syntax error elsewhere",
+      "f" in lsp.index_document("define f with a
+return a
+end
+say (")["functions"])
+
+s = lsp.LSPServer()
+s.handle({"jsonrpc": "2.0", "method": "textDocument/didOpen",
+          "params": {"textDocument": {"uri": "u", "text": NAV}}})
+r = s.handle({"jsonrpc": "2.0", "id": 1, "method": "textDocument/definition", "params": {
+    "textDocument": {"uri": "u"}, "position": {"line": 5, "character": 30}}})
+check("go-to-definition on a function call jumps to its define",
+      r[0]["result"]["range"]["start"] == {"line": 0, "character": 7}, r)
+r = s.handle({"jsonrpc": "2.0", "id": 2, "method": "textDocument/definition", "params": {
+    "textDocument": {"uri": "u"}, "position": {"line": 5, "character": 12}}})
+check("go-to-definition on a variable jumps to its first assignment",
+      r[0]["result"]["range"]["start"]["line"] == 3, r)
+r = s.handle({"jsonrpc": "2.0", "id": 3, "method": "textDocument/definition", "params": {
+    "textDocument": {"uri": "u"}, "position": {"line": 1, "character": 5}}})
+check("go-to-definition on a keyword returns nothing", r[0]["result"] is None, r)
+r = s.handle({"jsonrpc": "2.0", "id": 4, "method": "textDocument/hover", "params": {
+    "textDocument": {"uri": "u"}, "position": {"line": 5, "character": 30}}})
+check("hover on a user function shows its signature",
+      r[0]["result"]["contents"]["value"] == "define double with n", r)
+r = s.handle({"jsonrpc": "2.0", "id": 5, "method": "textDocument/completion",
+              "params": {"textDocument": {"uri": "u"}, "position": {"line": 0, "character": 0}}})
+labels = {i["label"] for i in r[0]["result"]}
+check("completion offers user symbols and keywords",
+      {"double", "total", "define", "reduce", "floor"} <= labels, sorted(labels)[:5])
+r = s.handle({"jsonrpc": "2.0", "id": 6, "method": "textDocument/documentSymbol",
+              "params": {"textDocument": {"uri": "u"}}})
+check("documentSymbol request works over the protocol", len(r[0]["result"]) == 3, r)
+caps = lsp.LSPServer().handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})[0]["result"]["capabilities"]
+check("capabilities advertise the new features",
+      caps["definitionProvider"] and caps["documentSymbolProvider"] and "completionProvider" in caps, caps)
+
 # ── real stdio transport, spoken by a real subprocess ──────────────────────
 print("stdio transport (subprocess)")
 

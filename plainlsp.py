@@ -21,6 +21,7 @@ import json
 import sys
 
 import plaincheck as pc
+import plainlang as pl
 
 SEVERITY_ERROR = 1
 SEVERITY_WARNING = 2
@@ -63,6 +64,87 @@ def diagnostics_for(source):
     return out
 
 
+SYMBOL_FUNCTION = 12
+SYMBOL_VARIABLE = 13
+COMPLETION_FUNCTION = 3
+COMPLETION_VARIABLE = 6
+COMPLETION_KEYWORD = 14
+
+
+def index_document(source):
+    """Token-based symbol index: {'functions': {name: {...}}, 'variables': {name: {...}}}.
+    Token-based (not tree-based) so it still works while the file has syntax errors."""
+    try:
+        toks = pl.tokenize(source)
+    except pl.PlainLangError:
+        return {"functions": {}, "variables": {}}
+    functions, variables = {}, {}
+
+    def record(table, tok, **extra):
+        name = tok[1]
+        if name not in table:
+            table[name] = {"line": tok[2] - 1, "col": tok[3] - 1, "length": tok[4], **extra}
+
+    n = len(toks)
+    for i, t in enumerate(toks):
+        nxt = toks[i + 1] if i + 1 < n else None
+        if t[0] != "KW" or nxt is None:
+            continue
+        kw = t[1]
+        if kw == "define" and nxt[0] == "IDENT":
+            params, j = [], i + 2
+            if j < n and toks[j][0] == "KW" and toks[j][1] == "with":
+                j += 1
+                while j < n and toks[j][2] == t[2]:
+                    if toks[j][0] == "IDENT":
+                        params.append(toks[j][1])
+                    j += 1
+            record(functions, nxt, params=params)
+        elif kw == "set" and nxt[0] == "IDENT":
+            record(variables, nxt)
+        elif kw == "count" and nxt[0] == "IDENT":
+            record(variables, nxt)
+        elif kw == "each" and nxt[0] == "IDENT":
+            record(variables, nxt)
+        elif kw == "into" and nxt[0] == "IDENT":
+            record(variables, nxt)
+    return {"functions": functions, "variables": variables}
+
+
+def _range(sym):
+    return {"start": {"line": sym["line"], "character": sym["col"]},
+            "end": {"line": sym["line"], "character": sym["col"] + sym["length"]}}
+
+
+def document_symbols(source):
+    idx = index_document(source)
+    out = []
+    for name, s in idx["functions"].items():
+        detail = "with " + " and ".join(s["params"]) if s["params"] else ""
+        out.append({"name": name, "kind": SYMBOL_FUNCTION, "detail": detail,
+                    "range": _range(s), "selectionRange": _range(s)})
+    for name, s in idx["variables"].items():
+        out.append({"name": name, "kind": SYMBOL_VARIABLE,
+                    "range": _range(s), "selectionRange": _range(s)})
+    out.sort(key=lambda o: (o["range"]["start"]["line"], o["range"]["start"]["character"]))
+    return out
+
+
+def completions_for(source):
+    idx = index_document(source)
+    items = []
+    for name, s in idx["functions"].items():
+        sig = "with " + " and ".join(s["params"]) if s["params"] else "no parameters"
+        items.append({"label": name, "kind": COMPLETION_FUNCTION, "detail": f"function ({sig})"})
+    for name in idx["variables"]:
+        items.append({"label": name, "kind": COMPLETION_VARIABLE, "detail": "variable"})
+    defined = {i["label"] for i in items}
+    for kw in sorted(pl.KEYWORDS):
+        if kw not in defined:
+            items.append({"label": kw, "kind": COMPLETION_KEYWORD, "detail": "keyword"})
+    return items
+
+
 class LSPServer:
     """Pure message handling: feed it a request/notification dict, get back the
     list of response/notification dicts to send. No stdio, no sockets."""
@@ -81,6 +163,9 @@ class LSPServer:
                 "capabilities": {
                     "textDocumentSync": 1,   # 1 = full-document sync
                     "hoverProvider": True,
+                    "definitionProvider": True,
+                    "documentSymbolProvider": True,
+                    "completionProvider": {"triggerCharacters": []},
                 },
                 "serverInfo": {"name": "plainlsp", "version": "0.1"},
             })]
@@ -112,6 +197,20 @@ class LSPServer:
             hover = self._hover_at(text, pos.get("line", 0), pos.get("character", 0))
             return [self._response(msg_id, hover)]
 
+        if method == "textDocument/definition":
+            uri = params.get("textDocument", {}).get("uri")
+            pos = params.get("position", {})
+            return [self._response(msg_id, self._definition_at(
+                uri, self.docs.get(uri, ""), pos.get("line", 0), pos.get("character", 0)))]
+
+        if method == "textDocument/documentSymbol":
+            uri = params.get("textDocument", {}).get("uri")
+            return [self._response(msg_id, document_symbols(self.docs.get(uri, "")))]
+
+        if method == "textDocument/completion":
+            uri = params.get("textDocument", {}).get("uri")
+            return [self._response(msg_id, completions_for(self.docs.get(uri, "")))]
+
         if method == "shutdown":
             self.shutdown_requested = True
             return [self._response(msg_id, None)]
@@ -132,10 +231,28 @@ class LSPServer:
         if not (0 <= line < len(lines)):
             return None
         word = _word_at(lines[line], char)
+        idx = index_document(text)
+        if word in idx["functions"]:
+            params = idx["functions"][word]["params"]
+            sig = f"define {word}" + (" with " + " and ".join(params) if params else "")
+            return {"contents": {"kind": "plaintext", "value": sig}}
+        if word in idx["variables"]:
+            return {"contents": {"kind": "plaintext", "value": f"variable {word}"}}
         doc = _HOVER_DOCS.get(word)
         if not doc:
             return None
         return {"contents": {"kind": "plaintext", "value": doc}}
+
+    def _definition_at(self, uri, text, line, char):
+        lines = text.split("\n")
+        if not (0 <= line < len(lines)):
+            return None
+        word = _word_at(lines[line], char)
+        idx = index_document(text)
+        sym = idx["functions"].get(word) or idx["variables"].get(word)
+        if not sym:
+            return None
+        return {"uri": uri, "range": _range(sym)}
 
     @staticmethod
     def _response(msg_id, result):
@@ -159,6 +276,18 @@ def _word_at(line, char):
 
 
 _HOVER_DOCS = {
+    "floor": "floor of X -- rounds down to a whole number.",
+    "ceiling": "ceiling of X -- rounds up to a whole number.",
+    "power": "power of X and Y -- X raised to the power Y.",
+    "min": "min of X and Y -- the smaller of two numbers.",
+    "max": "max of X and Y -- the larger of two numbers.",
+    "remainder": "remainder of X and Y -- what's left after dividing X by Y.",
+    "sum": "sum of LIST -- adds up a list of numbers.",
+    "average": "average of LIST -- the mean of a list of numbers.",
+    "sorted": "sorted of LIST -- a new list in ascending order.",
+    "split": "split TEXT by SEP -- breaks text into a list of pieces.",
+    "join": "join LIST by SEP -- glues a list into one piece of text.",
+    "length": "length of X -- how many characters, items, or fields.",
     "define": "define NAME with PARAM and PARAM ... end -- declares a function.",
     "if": "if CONDITION then ... otherwise ... end -- a decision.",
     "count": "count VAR from START to STOP ... end -- a counting loop.",
