@@ -1,0 +1,44 @@
+name: Deploy site
+
+# Builds the documentation site (every example executed for real) and publishes it
+# together with the playground on GitHub Pages.
+#
+# One-time setup by the repo owner: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". After that, every push to main redeploys.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the site (fails if any documentation example stops working)
+        run: python build_docs.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

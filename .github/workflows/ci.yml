@@ -32,6 +32,8 @@ jobs:
         run: python test_lsp.py
       - name: WebAssembly backend (runs real .wasm under Node)
         run: python test_wasm.py
+      - name: Documentation (every example runs, engines agree, every keyword covered)
+        run: python test_docs.py
 
   javascript:
     name: JavaScript engine (interpreter, transpiler, diagnostics)

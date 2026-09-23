@@ -11,3 +11,6 @@ _*.plang
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated documentation site (built and deployed by CI)
+site/

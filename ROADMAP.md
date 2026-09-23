@@ -69,8 +69,8 @@ The artifacts that prove engineering maturity:
 
 Make it real for learners:
 
-- [ ] Deploy the playground to a public URL (GitHub Pages)
-- [ ] A documentation site (guide, reference, tutorials)
+- [ ] Deploy the playground to a public URL (GitHub Pages) — *`pages.yml` workflow is ready; needs one click: Settings → Pages → Source: GitHub Actions*
+- [x] A documentation site — `build_docs.py` generates a guide + reference where every example is *executed at build time* and its real output embedded; `test_docs.py` checks each example runs, both engines agree on it, and every keyword in the language is documented
 - [x] Expand the Workbook into a full **interactive course** — 29 lessons in 6 units (first steps, decisions, loops, collections, functions, drawing); every lesson ships a reference solution that `test_lessons.js` proves passes its own checker while the starter does not
 - [ ] Save/share projects; a small gallery of learner creations
 - [ ] Accessibility pass; optional "teach in your language" (localized keywords)
