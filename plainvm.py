@@ -36,7 +36,7 @@ def to_str(v):
         return "true" if v else "false"
     if isinstance(v, float):
         # round to 10 decimals so output matches the JavaScript engine exactly
-        return str(int(v)) if v == int(v) else str(round(v * 1e10) / 1e10)
+        return pl.format_number(v)
     if isinstance(v, list):
         return "[" + ", ".join(to_str(x) for x in v) + "]"
     if isinstance(v, dict):
@@ -930,12 +930,16 @@ class VM:
             if isinstance(args[0], list):
                 return args[1] in args[0]
             return to_str(args[1]) in to_str(args[0])
-        if name == "round":     self.need_number(name, args[0]); return round(args[0])
+        if name == "round":     self.need_number(name, args[0]); return int(pl.round_half_away(args[0]))
         if name == "absolute":  self.need_number(name, args[0]); return abs(args[0])
         if name == "floor":     self.need_number(name, args[0]); return math.floor(args[0])
         if name == "ceiling":   self.need_number(name, args[0]); return math.ceil(args[0])
         if name == "power":
             self.need_number(name, args[0]); self.need_number(name, args[1])
+            if args[0] == 0 and args[1] < 0:
+                raise PlainLangError("You can't raise 0 to a negative power.", self.line)
+            if args[0] < 0 and args[1] != int(args[1]):
+                raise PlainLangError("I can't raise a negative number to a fractional power.", self.line)
             r = args[0] ** args[1]
             return int(r) if isinstance(r, float) and r == int(r) else r
         if name == "min":

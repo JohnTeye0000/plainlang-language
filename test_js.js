@@ -107,6 +107,26 @@ test("equality never errors across types, ordering still does", () => {
     ["true", "true"]);
   assert.ok(/can't compare/.test(out('say 5 is greater than "five"').error));
 });
+test("an if on the line after 'otherwise' is a nested statement, not an else-if chain", () => {
+  assert.deepStrictEqual(
+    out('set ok to true\nif false then\nsay "a"\notherwise\nif ok then\nsay "inner"\nend\nsay "after"\nend').output,
+    ["inner", "after"]);
+  assert.deepStrictEqual(
+    out('if false then\nsay 1\notherwise if true then\nsay "chain"\notherwise\nsay 3\nend').output, ["chain"]);
+});
+test("rounding is half away from zero (matches the Python engines)", () => {
+  assert.deepStrictEqual(out('say round of 2.5\nsay round of 3.5\nsay round of (minus 2.5)\nsay round of 2.4').output,
+    ["3", "4", "-3", "2"]);
+});
+test("numbers never print in scientific notation", () => {
+  assert.deepStrictEqual(
+    out('say 1 divided by 1000000\nsay 1 divided by 1000000000000\nsay 5 divided by 100000000000').output,
+    ["0.000001", "0", "0.0000000001"]);
+});
+test("power rejects zero-to-negative and negative-to-fractional", () => {
+  assert.ok(/negative power/.test(out('say power of 0 and (minus 1)').error));
+  assert.ok(/fractional power/.test(out('say power of (minus 8) and 0.5').error));
+});
 test("more math: floor, ceiling, power, min, max", () => {
   const r = out('say floor of 3.7\nsay ceiling of 3.2\nsay floor of (minus 3.2)\nsay ceiling of (minus 3.7)\nsay power of 2 and 10\nsay min of 4 and 9\nsay max of 4 and 9');
   assert.deepStrictEqual(r.output, ["3", "4", "-4", "-3", "1024", "4", "9"]);

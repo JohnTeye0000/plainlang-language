@@ -82,6 +82,14 @@ PROGRAMS = {
         'set a to list of 1, 2\nset b to list of 1, 2\nsay a is equal to b\n'
         'set p to record with "x" as 1\nset q to record with "x" as 1\nsay p is equal to q',
     "ordering still rejects incompatible types": 'say 5 is greater than "five"',
+    # regressions found by fuzzing the WebAssembly backend against the interpreter
+    "if nested at the start of an otherwise block":
+        'set ok to true\nif false then\nsay "a"\notherwise\nif ok then\nsay "inner"\nend\nsay "after"\nend',
+    "otherwise if on one line still chains": 'if false then\nsay 1\notherwise if true then\nsay "chain"\notherwise\nsay 3\nend',
+    "round is half away from zero": 'say round of 2.5\nsay round of 3.5\nsay round of (minus 2.5)\nsay round of 2.4',
+    "no scientific notation": 'say 1 divided by 1000000\nsay 1 divided by 1000000000000\nsay 5 divided by 100000000000',
+    "zero to a negative power": 'say power of 0 and (minus 1)',
+    "negative base to a fractional power": 'say power of (minus 8) and 0.5',
     "match subject/case type mismatch never errors":
         'match "hi"\nwhen 1 then\nsay "num"\notherwise\nsay "other"\nend',
     "stop exits loop": 'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend',

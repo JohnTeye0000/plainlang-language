@@ -42,6 +42,28 @@ except (AttributeError, ValueError):
 # message can underline the exact offending text with a caret, plus a hint
 # that may include a "did you mean?" suggestion.
 
+def round_half_away(x):
+    """Schoolbook rounding: 2.5 -> 3 and -2.5 -> -3. (Python's own round() is
+    banker's rounding, JavaScript's Math.round() rounds ties toward +infinity;
+    every PlainLang engine uses this one rule instead so they agree.)"""
+    return math.copysign(math.floor(abs(x) + 0.5), x)
+
+
+def format_number(v):
+    """How every engine prints a float: whole numbers without a decimal point,
+    everything else rounded to 10 places, and never in scientific notation
+    (Python and JavaScript disagree about when to switch to it)."""
+    if v == int(v):
+        return str(int(v))
+    r = round_half_away(v * 1e10) / 1e10
+    if r == int(r):
+        return str(int(r))
+    text = repr(r)
+    if "e" in text or "E" in text:
+        text = f"{r:.10f}".rstrip("0").rstrip(".")
+    return text
+
+
 class PlainLangError(Exception):
     def __init__(self, message, line=None, hint=None, col=None, length=None, near=None):
         self.message = message
@@ -407,8 +429,10 @@ class Parser:
         branches.append((cond, self.block()))
         else_block = None
         while self.is_kw("otherwise"):
-            self.advance()
-            if self.is_kw("if"):
+            other_line = self.advance()[2]
+            # 'otherwise if' chains only when 'if' is on the same line; an 'if' on
+            # the next line is an ordinary statement inside the else-block
+            if self.is_kw("if") and self.peek()[2] == other_line:
                 self.advance()
                 cond = self.expression()
                 self.eat_kw("then")
@@ -1249,7 +1273,7 @@ class Interpreter:
                 return part in container
             return self.to_str(part) in self.to_str(container)
         if name == "round":
-            self._need_number(name, args[0]); return round(args[0])
+            self._need_number(name, args[0]); return int(round_half_away(args[0]))
         if name == "absolute":
             self._need_number(name, args[0]); return abs(args[0])
         if name == "floor":
@@ -1258,6 +1282,10 @@ class Interpreter:
             self._need_number(name, args[0]); return math.ceil(args[0])
         if name == "power":
             self._need_number(name, args[0]); self._need_number(name, args[1])
+            if args[0] == 0 and args[1] < 0:
+                raise PlainLangError("You can't raise 0 to a negative power.", self.current_line)
+            if args[0] < 0 and args[1] != int(args[1]):
+                raise PlainLangError("I can't raise a negative number to a fractional power.", self.current_line)
             r = args[0] ** args[1]
             return int(r) if isinstance(r, float) and r == int(r) else r
         if name == "min":
@@ -1342,7 +1370,7 @@ class Interpreter:
             return "true" if v else "false"
         if isinstance(v, float):
             # round to 10 decimals so output matches the JavaScript engine exactly
-            return str(int(v)) if v == int(v) else str(round(v * 1e10) / 1e10)
+            return format_number(v)
         if isinstance(v, list):
             return "[" + ", ".join(self.to_str(x) for x in v) + "]"
         if isinstance(v, dict):

@@ -314,8 +314,10 @@
       branches.push([cond, this.block()]);
       let elseBlock = null;
       while (this.isKw("otherwise")) {
-        this.advance();
-        if (this.isKw("if")) {
+        const otherLine = this.advance()[2];
+        // 'otherwise if' chains only when 'if' is on the same line; an 'if' on the
+        // next line is an ordinary statement inside the else-block
+        if (this.isKw("if") && this.peek()[2] === otherLine) {
           this.advance();
           cond = this.expression(); this.eatKw("then");
           branches.push([cond, this.block()]);
@@ -874,12 +876,14 @@
         if (Array.isArray(args[0])) return args[0].includes(args[1]);
         return toStr(args[0]).includes(toStr(args[1]));
       }
-      if (name === "round") { this.needNumber(name, args[0]); return Math.round(args[0]); }
+      if (name === "round") { this.needNumber(name, args[0]); return roundHalfAway(args[0]); }
       if (name === "absolute") { this.needNumber(name, args[0]); return Math.abs(args[0]); }
       if (name === "floor") { this.needNumber(name, args[0]); return Math.floor(args[0]); }
       if (name === "ceiling") { this.needNumber(name, args[0]); return Math.ceil(args[0]); }
       if (name === "power") {
         this.needNumber(name, args[0]); this.needNumber(name, args[1]);
+        if (args[0] === 0 && args[1] < 0) throw new PlainLangError("You can't raise 0 to a negative power.", this.currentLine);
+        if (args[0] < 0 && !Number.isInteger(args[1])) throw new PlainLangError("I can't raise a negative number to a fractional power.", this.currentLine);
         return Math.pow(args[0], args[1]);
       }
       if (name === "min") { this.needNumber(name, args[0]); this.needNumber(name, args[1]); return Math.min(args[0], args[1]); }
@@ -949,9 +953,22 @@
     if (raw.trim() !== "" && !isNaN(Number(raw))) return Number(raw);
     return raw;
   }
+  function roundHalfAway(x) {
+    // schoolbook rounding (2.5 -> 3, -2.5 -> -3); Math.round rounds ties toward +infinity
+    return Math.sign(x) * Math.floor(Math.abs(x) + 0.5);
+  }
+  function formatNumber(v) {
+    // whole numbers plainly, everything else rounded to 10 places, and never in
+    // scientific notation (JS and Python disagree about when to switch to it)
+    if (Number.isInteger(v)) return Math.abs(v) < 1e21 ? String(v) : BigInt(v).toString();
+    const r = roundHalfAway(v * 1e10) / 1e10;
+    if (Number.isInteger(r)) return String(r);
+    const text = String(r);
+    return /e/i.test(text) ? r.toFixed(10).replace(/0+$/, "").replace(/\.$/, "") : text;
+  }
   function toStr(v) {
     if (typeof v === "boolean") return v ? "true" : "false";
-    if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);
+    if (typeof v === "number") return formatNumber(v);
     if (isPlFn(v)) return `function ${v.name}`;
     if (Array.isArray(v)) return "[" + v.map(toStr).join(", ") + "]";
     if (isDict(v)) return "{" + Object.keys(v).map((k) => `${k}: ${toStr(v[k])}`).join(", ") + "}";

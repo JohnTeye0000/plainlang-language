@@ -87,6 +87,24 @@ expect_output("structural equality for lists and records",
     'set a to list of 1, 2\nset b to list of 1, 2\nsay a is equal to b\n'
     'set p to record with "x" as 1\nset q to record with "x" as 1\nsay p is equal to q',
     ["true", "true"])
+# regression: an 'if' on the line AFTER 'otherwise' is an ordinary statement inside
+# the else-block, not an 'otherwise if' chain (newlines used to be invisible here)
+expect_output("if nested at the start of an otherwise block",
+    'set ok to true\nif false then\nsay "a"\notherwise\nif ok then\nsay "inner"\nend\nsay "after"\nend',
+    ["inner", "after"])
+expect_output("'otherwise if' on one line still chains",
+    'if false then\nsay 1\notherwise if true then\nsay "chain"\notherwise\nsay 3\nend', ["chain"])
+# regression: rounding is schoolbook (half away from zero) in every engine
+expect_output("round is half away from zero",
+    'say round of 2.5\nsay round of 3.5\nsay round of (minus 2.5)\nsay round of 2.4', ["3", "4", "-3", "2"])
+# regression: numbers never print in scientific notation, and tiny values that
+# round to zero print as 0 (not 0.0)
+expect_output("no scientific notation",
+    'say 1 divided by 1000000\nsay 1 divided by 1000000000000\nsay 5 divided by 100000000000',
+    ["0.000001", "0", "0.0000000001"])
+# regression: power used to crash (0 ** -1) or produce a complex number
+expect_error("zero to a negative power", 'say power of 0 and (minus 1)', "negative power")
+expect_error("negative base to a fractional power", 'say power of (minus 8) and 0.5', "fractional power")
 expect_error("ordering still rejects incompatible types",
     'say 5 is greater than "five"', "I can't compare")
 expect_output("and", 'if true and false then\nsay "n"\notherwise\nsay "y"\nend', ["y"])
