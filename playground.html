@@ -269,6 +269,7 @@
   .wb-list { padding: 10px 0; }
   .wb-item { display: flex; align-items: center; gap: 14px; padding: 12px 24px; cursor: pointer;
              border-bottom: 1px dotted var(--rule); }
+  .wb-unit { padding: 16px 24px 6px; font: 600 11px/1 var(--mono, monospace); letter-spacing: .14em; text-transform: uppercase; color: var(--red); }
   .wb-item:hover { background: var(--paper-2); }
   .wb-num { font-family: var(--serif); font-style: italic; color: var(--red-ink); width: 26px; font-size: 15px; }
   .wb-tick { width: 22px; height: 22px; border: 1.5px solid var(--rule-2); border-radius: 50%;
@@ -419,6 +420,7 @@
   <div class="toast" id="toast"></div>
 
 <script src="plainlang.js"></script>
+<script src="lessons.js"></script>
 <script>
 (function () {
   "use strict";
@@ -909,59 +911,11 @@ say "dice roll: " plus random between 1 and 6`,
   };
 
   // ── The Workbook: a guided, auto-checked curriculum ────────────────────────
-  const LESSONS = [
-    { title: "Say something",
-      brief: 'Use <code>say</code> to print a greeting. Make the program print exactly: <code>Hello, world!</code>',
-      starter: '# Lesson 1 — print a line of text.\n# Use:  say "your words here"\n\n',
-      check(r){ if(!r.ok) return "Your program has an error — read §2 and fix it.";
-        return r.output.some(l=>l.trim()==="Hello, world!") ? "" : "Not yet — it should print exactly: Hello, world!"; } },
-    { title: "Remember a value",
-      brief: 'Create a variable called <code>age</code>, set it to a number, then print a sentence like <code>I am 12 years old</code> that uses the variable.',
-      starter: '# Lesson 2 — variables.\n# set age to ...   then   say ... plus age plus ...\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/set\s+age\s+to/i.test(src)) return "Make a variable named age:  set age to ...";
-        return r.output.some(l=>/^I am \d+ years old$/.test(l.trim())) ? "" : "Print a line exactly like: I am 12 years old"; } },
-    { title: "Do some math",
-      brief: 'Print the answer to 23 × 19 — but let PlainLang multiply it with <code>multiplied by</code> (don’t just type 437).',
-      starter: '# Lesson 3 — arithmetic.\n# Use:  multiplied by\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/multiplied by/i.test(src)) return "Use 'multiplied by' to do the calculation.";
-        return r.output.some(l=>l.includes("437")) ? "" : "That doesn't equal 437 yet."; } },
-    { title: "Make a decision",
-      brief: 'A variable <code>score</code> is provided. Print <code>PASS</code> when it is at least 50, otherwise <code>FAIL</code>. Use <code>if … otherwise … end</code>.',
-      starter: 'set score to 72\n\n# Lesson 4 — if / otherwise.\n# Print PASS if score is at least 50, otherwise FAIL.\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/\bif\b/i.test(src) || !/otherwise/i.test(src)) return "Use an if … otherwise … end.";
-        return r.output.some(l=>l.trim()==="PASS") ? "" : "With score 72 it should print PASS. (Try other scores too!)"; } },
-    { title: "Count to five",
-      brief: 'Print the numbers <code>1</code> through <code>5</code>, each on its own line, using a loop.',
-      starter: '# Lesson 5 — loops.\n# Use:  count i from 1 to 5  ...  end\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/(count|repeat|while)/i.test(src)) return "Use a loop (count / repeat), not five separate say lines.";
-        return r.output.map(l=>l.trim()).join(",") === "1,2,3,4,5" ? "" : "It should print 1, 2, 3, 4, 5 — one per line."; } },
-    { title: "Add up a list",
-      brief: 'Make a list of <code>4, 8, 15</code>, then use <code>for each</code> to add them and print the total (<code>27</code>).',
-      starter: '# Lesson 6 — lists.\n# set nums to list of 4, 8, 15\n# for each n in nums ... end\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/list of/i.test(src)) return "Make a list:  set nums to list of 4, 8, 15";
-        if(!/for each/i.test(src)) return "Walk the list:  for each n in nums ... end";
-        return r.output.some(l=>l.includes("27")) ? "" : "The total should be 27."; } },
-    { title: "Write a function",
-      brief: 'Define a function <code>double</code> that returns its input times two, then print <code>double with 50</code> (it should be <code>100</code>).',
-      starter: '# Lesson 7 — functions.\n# define double with n ... return ... end\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/define\s+double\s+with/i.test(src)) return "Start with:  define double with n";
-        if(!/return/i.test(src)) return "A function hands back a value with 'return'.";
-        return r.output.some(l=>l.includes("100")) ? "" : "double with 50 should be 100."; } },
-    { title: "Draw a square",
-      brief: 'Open the <code>Drawn</code> tab. Use <code>move forward</code> and <code>turn right</code> inside a loop to draw a square.',
-      starter: '# Lesson 8 — turtle drawing!\n# repeat 4 times\n#     move forward 120\n#     turn right 90\n# end\n\n',
-      check(r,src){ if(!r.ok) return "There's an error — check §2.";
-        if(!/move/i.test(src)) return "Move the turtle:  move forward 120";
-        return (r.turtle && r.turtle.length >= 4) ? "" : "Draw at least four sides to make a square."; } },
-  ];
+  // The lessons live in lessons.js (shared with the test suite, which proves every
+  // lesson's reference solution passes its own check).
+  const LESSONS = window.PLAINLANG_LESSONS;
 
-  const PROGRESS_KEY = "plainlang.progress.v1";
+  const PROGRESS_KEY = "plainlang.progress.v2";
   function loadProgress() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch (e) { return {}; } }
   function saveProgress(p) { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch (e) {} }
   let progress = loadProgress();
@@ -969,12 +923,17 @@ say "dice roll: " plus random between 1 and 6`,
 
   function doneCount() { return LESSONS.filter((_, i) => progress[i]).length; }
   function renderWorkbook() {
-    $("wbList").innerHTML = LESSONS.map((l, i) => `
+    let lastUnit = null;
+    $("wbList").innerHTML = LESSONS.map((l, i) => {
+      const unitRow = l.unit !== lastUnit ? `<div class="wb-unit">${l.unit}</div>` : "";
+      lastUnit = l.unit;
+      return unitRow + `
       <div class="wb-item${progress[i] ? " done" : ""}" data-i="${i}">
         <span class="wb-num">${i + 1}</span>
         <span class="wb-tick">✓</span>
         <span class="wb-info"><b>${l.title}</b><span>${l.brief.replace(/<[^>]+>/g, "")}</span></span>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     $("wbList").querySelectorAll(".wb-item").forEach((el) =>
       el.addEventListener("click", () => { closeWorkbook(); startLesson(parseInt(el.dataset.i, 10)); }));
   }

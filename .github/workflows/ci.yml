@@ -43,3 +43,5 @@ jobs:
           node-version: "20"
       - name: JS engine + transpiler tests
         run: node test_js.js
+      - name: Workbook lessons (every solution passes its own check)
+        run: node test_lessons.js

@@ -71,7 +71,7 @@ Make it real for learners:
 
 - [ ] Deploy the playground to a public URL (GitHub Pages)
 - [ ] A documentation site (guide, reference, tutorials)
-- [ ] Expand the Workbook into a full **interactive course** (dozens of lessons, multiple units)
+- [x] Expand the Workbook into a full **interactive course** — 29 lessons in 6 units (first steps, decisions, loops, collections, functions, drawing); every lesson ships a reference solution that `test_lessons.js` proves passes its own checker while the starter does not
 - [ ] Save/share projects; a small gallery of learner creations
 - [ ] Accessibility pass; optional "teach in your language" (localized keywords)
 - [ ] Release **v1.0**
