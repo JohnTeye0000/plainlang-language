@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 565 tests + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
+&nbsp;·&nbsp; 609 tests + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -51,6 +51,7 @@ run one step at a time.
 | **`vscode-extension/`** | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
 | **`lessons.js`** / **`test_lessons.js`** | The Workbook: a 29-lesson, 6-unit interactive course. Every lesson has a reference solution, and the tests prove each solution passes its own checker and each untouched starter does not. |
 | **`build_docs.py`** / **`docs_content.py`** / **`test_docs.py`** | The documentation site. Every example is *run* when the site is built and its real output printed beneath it; tests check that each example works, that the Python and JS engines agree, and that every keyword is documented. `pages.yml` deploys it with the playground to GitHub Pages. |
+| **`test_a11y.py`** | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 

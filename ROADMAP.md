@@ -73,7 +73,8 @@ Make it real for learners:
 - [x] A documentation site — `build_docs.py` generates a guide + reference where every example is *executed at build time* and its real output embedded; `test_docs.py` checks each example runs, both engines agree on it, and every keyword in the language is documented
 - [x] Expand the Workbook into a full **interactive course** — 29 lessons in 6 units (first steps, decisions, loops, collections, functions, drawing); every lesson ships a reference solution that `test_lessons.js` proves passes its own checker while the starter does not
 - [ ] Save/share projects; a small gallery of learner creations
-- [ ] Accessibility pass; optional "teach in your language" (localized keywords)
+- [x] Accessibility pass — an axe-core audit of the playground (5 rule failures) and docs found and drove fixes: WCAG AA contrast on every palette colour, labelled controls, landmarks and a skip link, real tab semantics with arrow-key support, a modal Workbook with focus trap/Escape/focus return, live regions for output, keyboard-reachable scroll regions, no editor keyboard trap, `prefers-reduced-motion`. Zero violations across 8 UI states; `test_a11y.py` locks it in.
+- [ ] Optional "teach in your language" (localized keywords)
 - [ ] Release **v1.0**
 
 ## Phase 5 — Impact & evidence  *(ongoing)*

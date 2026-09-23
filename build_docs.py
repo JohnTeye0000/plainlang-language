@@ -81,8 +81,8 @@ def render_example(ex, problems):
 
 
 CSS = """
-:root{--paper:#f4eee1;--paper-2:#ece2cf;--ink:#211b14;--ink-2:#4a4034;--soft:#8c7f6a;--rule:#d2c6ad;--red:#c0392b;--red-ink:#9c2a1f;
---str:#5d6a24;--num:#a8551d;--com:#a4977f;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+:root{--paper:#f4eee1;--paper-2:#ece2cf;--ink:#211b14;--ink-2:#4a4034;--soft:#665b48;--rule:#d2c6ad;--red:#c0392b;--red-ink:#9c2a1f;
+--str:#55621f;--num:#963f0d;--com:#665b48;--serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
 --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,monospace}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;background:radial-gradient(1400px 700px at 78% -15%,#fbf7ed 0%,var(--paper) 60%);color:var(--ink);font:16px/1.65 var(--sans)}
@@ -114,7 +114,7 @@ table{border-collapse:collapse;width:100%}td{padding:9px 12px;border-top:1px sol
 td:first-child{white-space:nowrap;font-family:var(--mono);font-size:14px}
 footer{color:var(--soft);font-size:14px;margin-top:64px;padding-top:20px;border-top:1px solid var(--rule)}
 @media(max-width:800px){.layout{grid-template-columns:1fr;padding:0 16px}nav{position:static;height:auto;padding:20px 0 0}}
-@media(prefers-color-scheme:dark){:root{--paper:#1c1813;--paper-2:#2a241c;--ink:#f1e9d8;--ink-2:#cdbfa4;--soft:#9d8f76;--rule:#3b3327;--red:#e2604f;--red-ink:#f08a7a;--str:#a7b95c;--num:#e0904f;--com:#8a7d66}
+@media(prefers-color-scheme:dark){:root{--paper:#1c1813;--paper-2:#2a241c;--ink:#f1e9d8;--ink-2:#cdbfa4;--soft:#9d8f76;--rule:#3b3327;--red:#e2604f;--red-ink:#f08a7a;--str:#a7b95c;--num:#e0904f;--com:#a89b82}
 body{background:var(--paper)}pre.code{background:#231e17}pre.out{background:#0f0d0a}nav .play{background:var(--red)}}
 """
 
