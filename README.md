@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 380 tests + differential fuzzing &nbsp;·&nbsp; 3 execution back ends
+&nbsp;·&nbsp; 455 tests + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -45,6 +45,9 @@ run one step at a time.
 | **`test_imports.py`** | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
 | **`plainlsp.py`** | A **Language Server** — live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
 | **`test_lsp.py`** | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
+| **`plainwasm.py`** | A **WebAssembly backend** — compiles PlainLang to a real `.wasm` binary (hand-written encoder: LEB128, sections, opcodes, structured control flow). Runs in any WASM host. |
+| **`wasm_runner.js`** | The small host that supplies a compiled module's imports (print, fail, pow) and runs it under Node. |
+| **`fuzz_wasm.py`** / **`test_wasm.py`** | A differential fuzzer and test suite that run every program through the interpreter *and* real WebAssembly and demand identical output. |
 | **`vscode-extension/`** | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
@@ -256,6 +259,14 @@ checked for identical output on both engines. This has found real bugs twice:
    well-defined across types (like Python's own `==`), only ordering requires matching
    operand shapes, and list/record equality is structural in all three engines.
 
+4. A *fourth* engine turned up four more. `plainwasm.py` (below) compiles to real WebAssembly,
+   so fuzzing it against the interpreter meant comparing more independent implementations
+   than ever — and they immediately disagreed: an `if` on the line after `otherwise` was
+   silently parsed as `otherwise if` (newlines were invisible to the parser, so a nested `if`
+   swallowed an `end`); `round` gave `2` for `2.5` in Python but `3` in JavaScript; Python printed
+   `6.64712e-05` where JavaScript printed `0.0000664712`; and `power of 0 and -1` crashed the
+   interpreter with a raw exception. Each is fixed once, in every engine, with a regression test.
+
 Now 20,000+ random programs across the full language agree.
 
 ### Seeing the bytecode
@@ -359,6 +370,31 @@ program *does* (every program in `test_fmt.py` is run before and after formattin
 must produce identical output), and formatting an already-formatted file is a no-op
 (idempotence). `demo.plang` was written by hand and happens to already match the
 formatter's output byte-for-byte.
+
+### Compiling to WebAssembly
+
+`plainwasm.py` compiles PlainLang to a real **`.wasm` binary** — not text, not a wrapper: it
+writes the module bytes itself (LEB128 integers, type/import/function/memory/global/export/code/
+data sections, opcodes, and structured control flow with `br`-depth bookkeeping), so there's no
+assembler, LLVM, or toolchain in the loop. The output runs in any WebAssembly host.
+
+```
+$ python plainwasm.py program.plang              # compile, then run under Node
+$ python plainwasm.py program.plang -o out.wasm  # just emit the binary
+```
+
+It covers a "systems core" of the language — numbers (f64) and true/false, all arithmetic and
+comparisons, `if`/`match`/`repeat`/`while`/`count`/`stop`/`skip`, functions with recursion, the
+math built-ins, and `say` with text — and refuses anything else (lists, records, text
+variables) with a plain explanation instead of miscompiling. `count` uses the same hidden-counter
+design the VM adopted after the nested-loop bug; `round`, `remainder`, and `power` are emitted to
+match the interpreter's exact semantics (WASM's own `f64.nearest` rounds ties to even, so `round`
+is built from `floor`); divide-by-zero and friends call a host `fail` instead of producing `inf`.
+
+It's held to the same standard as every other engine: `fuzz_wasm.py` generates random programs
+and checks the interpreter and **real WebAssembly** agree on every one — output *and* the point
+where a runtime error stops the program. Known, documented limit: the WASM backend uses doubles,
+so integers beyond 2^53 lose precision where the interpreter's integers are exact.
 
 ### Editor tooling
 

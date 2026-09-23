@@ -51,7 +51,7 @@ Deepen the back end into something a compilers course would recognize:
 - [x] Parser **error recovery** (panic-mode) → the static checker reports many syntax errors at once instead of stopping at the first
 - [x] **Source maps** — disassembler shows the source line per instruction, and `--trace` watches the VM execute step by step (source line + operand stack)
 - [x] **Portable bytecode** — `--emit` compiles a program to a distributable bytecode file; `--run-bc` runs it without the source or parser (round-trip verified)
-- [ ] A native backend: compile to **WebAssembly** (or C)
+- [x] A native backend: compile to **WebAssembly** — `plainwasm.py` emits real `.wasm` binaries with no external tools (numbers, booleans, text output, all control flow, functions incl. recursion); runs under Node and is differentially fuzzed against the interpreter. Lists/records/text variables still to come.
 - [ ] Release **v0.3**
 
 ## Phase 3 — Real tooling  *(weeks)*

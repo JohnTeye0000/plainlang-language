@@ -30,6 +30,8 @@ jobs:
         run: python test_imports.py
       - name: Language server
         run: python test_lsp.py
+      - name: WebAssembly backend (runs real .wasm under Node)
+        run: python test_wasm.py
 
   javascript:
     name: JavaScript engine (interpreter, transpiler, diagnostics)
