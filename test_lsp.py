@@ -108,28 +108,17 @@ check("an unknown request still gets a reply (never hangs the client)",
 # ── navigation: symbols, definition, completion, richer hover ──────────────
 print("navigation")
 
-NAV = 'define double with n
-    return n multiplied by 2
-end
-set total to 0
-count i from 1 to 3
-    set total to total plus double with i
-end
-'
+NAV = ('define double with n\n    return n multiplied by 2\nend\nset total to 0\n'
+       'count i from 1 to 3\n    set total to total plus double with i\nend\n')
 syms = lsp.document_symbols(NAV)
 check("document symbols list functions and variables",
       [(s["name"], s["kind"]) for s in syms] == [("double", 12), ("total", 13), ("i", 13)], syms)
 check("function symbol carries its signature", syms[0]["detail"] == "with n", syms[0])
 
-idx = lsp.index_document("define f with a and b
-return a
-end")
+idx = lsp.index_document("define f with a and b\nreturn a\nend")
 check("index captures parameters", idx["functions"]["f"]["params"] == ["a", "b"], idx)
 check("index survives a syntax error elsewhere",
-      "f" in lsp.index_document("define f with a
-return a
-end
-say (")["functions"])
+      "f" in lsp.index_document("define f with a\nreturn a\nend\nsay (")["functions"])
 
 s = lsp.LSPServer()
 s.handle({"jsonrpc": "2.0", "method": "textDocument/didOpen",
