@@ -1,0 +1,119 @@
+(* ═══════════════════════════════════════════════════════════════════════════
+   PlainLang — syntactic grammar
+
+   This file is the specification of PlainLang's syntax, and it is executable:
+   plainspec.py reads it and recognizes programs directly, and test_spec.py
+   differentially tests that recognizer against the real parsers on thousands
+   of valid and deliberately-corrupted programs. Anything the grammar and a
+   parser disagree about is a bug in one of them.
+
+   Notation (PEG-flavoured EBNF)
+     "word"      the keyword `word` (keywords are case-insensitive)
+     "word"@     the keyword `word`, on the SAME LINE as the token before it
+                 (the one context-sensitive rule: `otherwise if` chains only
+                  when the `if` is on the `otherwise` line)
+     IDENT       an identifier      NUMBER   a number      STRING   a text literal
+     EOF         end of the program
+     a b         sequence           a | b    ordered choice (first match wins)
+     { a }       zero or more       [ a ]    optional      ( a )    grouping
+   Newlines are otherwise insignificant: a program is a stream of tokens.
+   ═══════════════════════════════════════════════════════════════════════════ *)
+
+program        = block EOF ;
+
+(* A block is a run of statements; it ends where no statement can start,
+   which is exactly at `end`, `otherwise`, `when`, or the end of the program. *)
+block          = { statement } ;
+
+statement      = set_stmt | say_stmt | ask_stmt | if_stmt | match_stmt
+               | repeat_stmt | while_stmt | count_stmt | foreach_stmt
+               | define_stmt | import_stmt | return_stmt | add_stmt | remove_stmt
+               | "stop" | "skip"
+               | call_stmt ;
+
+set_stmt       = "set" ( "item" expr "of" primary "to" expr
+                       | IDENT "to" expr ) ;
+say_stmt       = "say" expr ;
+ask_stmt       = "ask" expr "into" IDENT ;
+
+if_stmt        = "if" expr "then" block
+                 { "otherwise" "if"@ expr "then" block }
+                 [ "otherwise" block ]
+                 "end" ;
+
+match_stmt     = "match" expr
+                 { "when" expr "then" block }
+                 [ "otherwise" block ]
+                 "end" ;
+
+repeat_stmt    = "repeat" expr "times" block "end" ;
+while_stmt     = "while" expr block "end" ;
+count_stmt     = "count" IDENT "from" expr "to" expr block "end" ;
+foreach_stmt   = "for" "each" IDENT "in" expr block "end" ;
+
+define_stmt    = "define" IDENT [ "with" IDENT { "and" IDENT } ] block "end" ;
+import_stmt    = "import" STRING ;
+return_stmt    = "return" expr ;
+add_stmt       = "add" expr "to" IDENT ;
+remove_stmt    = "remove" "item" expr "from" IDENT ;
+
+(* `call` is optional: a bare `greet with "Bob"` is a call statement too.
+   Arguments are separated by `and`, so each argument is parsed *below* the
+   and/or operators; a boolean argument needs parentheses:  f with (a and b) *)
+call_stmt      = [ "call" ] IDENT [ "with" comparison { "and" comparison } ] ;
+
+(* ── expressions, loosest to tightest ─────────────────────────────────── *)
+
+expr           = or_expr ;
+or_expr        = and_expr { "or" and_expr } ;
+and_expr       = not_expr { "and" not_expr } ;
+not_expr       = "not" not_expr | comparison ;
+
+(* comparisons do not chain; a bare `is` means `is equal to` *)
+comparison     = arith [ "is" cmp_op arith
+                       | "contains" arith ] ;
+cmp_op         = "not" [ "equal" [ "to" ] ]
+               | "greater" "than"
+               | "less" "than"
+               | "at" ( "least" | "most" )
+               | "equal" [ "to" ]
+               | ;
+
+arith          = term { ( "plus" | "minus" ) term } ;
+term           = factor { ( "multiplied" | "divided" ) "by" factor } ;
+factor         = "minus" factor | primary ;
+
+primary        = NUMBER
+               | STRING
+               | "(" expr ")"
+               | "true" | "false"
+               | "empty" ( "record" | "list" )
+               | "list" "of" expr { "," expr }
+               | record_lit
+               | ( "map" | "filter" ) comparison "over" comparison
+               | "reduce" comparison "over" comparison "from" comparison
+               | "item" expr "of" primary
+               | ( "length" | "uppercase" | "lowercase" | "round" | "absolute"
+                 | "keys" | "trim" | "sum" | "average" | "smallest" | "largest"
+                 | "first" | "last" | "reverse" | "sorted" | "floor" | "ceiling" )
+                 "of" primary
+               | "square" "root" "of" primary
+               | ( "remainder" | "power" | "min" | "max" ) "of" arith "and" arith
+               | "split" comparison "by" comparison
+               | "join" comparison "by" comparison
+               | "replace" comparison "by" comparison "in" comparison
+               | "position" "of" comparison "in" comparison
+               | "random" "between" arith "and" arith
+               | IDENT [ "with" comparison { "and" comparison } ] ;
+
+record_lit     = "record" "with" comparison "as" comparison
+                 { "," comparison "as" comparison } ;
+
+(* ── the browser playground's turtle-graphics extension ───────────────────
+   Only the JavaScript engine accepts these (the command-line engines say
+   "turtle drawing only works in the web playground"). plainspec.py enables
+   them with turtle=True. *)
+turtle_stmt    = "move" [ "forward" | "backward" | "back" ] expr
+               | "turn" [ "right" | "left" ] expr
+               | "pen" ( "up" | "down" | "color" "to" expr )
+               | "wait" expr ;
