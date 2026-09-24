@@ -36,6 +36,14 @@ jobs:
         run: python test_docs.py
       - name: Accessibility (WCAG AA palette contrast, landmarks, labels, keyboard support)
         run: python test_a11y.py
+      - name: Language specification (grammar vs both parsers; every rule's example on every engine)
+        run: python test_spec.py
+      - name: SPEC.md is up to date
+        run: python build_spec.py --check
+      - name: Unified command-line tool
+        run: python test_cli.py
+      - name: Every suite is wired into CI and the runner
+        run: python test_meta.py
 
   javascript:
     name: JavaScript engine (interpreter, transpiler, diagnostics)

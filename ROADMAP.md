@@ -40,7 +40,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] More math: `floor`, `ceiling`, `power`, `min`, `max` — cross-validated across all three engines; also fixed a real equality-semantics bug the fuzzer found along the way (`is equal to` between mismatched types incorrectly raised, and JS compared lists/records by reference instead of value)
 - [ ] More standard library: dates
 - [x] Modules / imports — `import "utils.plang"` pulls another file's function definitions into the current program (CLI-focused — the browser has no filesystem); resolves transitive and diamond imports, rejects cycles and non-library files, cross-validated between the tree-walker and the VM
-- [ ] Release **v0.2**
+- [x] Release **v0.2** — tagged `v0.2.0` (see [CHANGELOG.md](CHANGELOG.md)); the one open Phase 1 item is a dates library
 
 ## Phase 2 — A real compiler  *(weeks)*
 
@@ -52,7 +52,7 @@ Deepen the back end into something a compilers course would recognize:
 - [x] **Source maps** — disassembler shows the source line per instruction, and `--trace` watches the VM execute step by step (source line + operand stack)
 - [x] **Portable bytecode** — `--emit` compiles a program to a distributable bytecode file; `--run-bc` runs it without the source or parser (round-trip verified)
 - [x] A native backend: compile to **WebAssembly** — `plainwasm.py` emits real `.wasm` binaries with no external tools (numbers, booleans, text output, all control flow, functions incl. recursion); runs under Node and is differentially fuzzed against the interpreter. Lists/records/text variables still to come.
-- [ ] Release **v0.3**
+- [x] Release **v0.3** — tagged `v0.3.0`
 
 ## Phase 3 — Real tooling  *(weeks)*
 
@@ -61,9 +61,9 @@ The artifacts that prove engineering maturity:
 - [x] A **Language Server (LSP)**: `plainlsp.py` — live diagnostics, hover, go-to-definition, document symbols, and autocomplete, spoken over real LSP stdio framing so any LSP-capable editor can talk to it
 - [x] A **VS Code extension** (`vscode-extension/`) wired to `plainlsp.py` over stdio — TextMate syntax highlighting, live diagnostics, and hover, no PlainLang-specific logic in the client itself (not yet published to the marketplace, but installable from source)
 - [x] A **code formatter** (`plainfmt`, like gofmt/prettier) — re-indents from block structure, normalizes whitespace, tested for both idempotence and that it never changes a program's output; wired into CI
-- [ ] **CI/CD** with GitHub Actions running every test suite on each push (green badge)
+- [x] **CI/CD** with GitHub Actions running every test suite on each push (`ci.yml`), plus a Pages deploy workflow (`pages.yml`)
 - [x] A **differential fuzzer** — random programs run through both engines and asserted to agree; already found and fixed a real codegen bug (nested `count` loops reusing a variable). Wired into CI.
-- [ ] Release **v0.4**
+- [x] Release **v0.4** — tagged `v0.4.0`
 
 ## Phase 4 — Product & reach  *(weeks)*
 
@@ -92,7 +92,7 @@ The part that actually differentiates a college application:
 - [ ] **Self-hosting**: write part of PlainLang's tooling *in* PlainLang
 - [ ] A breakpoint debugger with a real debug protocol
 - [ ] A concurrency model
-- [ ] Formal semantics / a small specification document
+- [x] Formal semantics / a specification document — `SPEC.md`, generated from an **executable grammar** (`grammar.ebnf`, run by `plainspec.py` and differentially tested against both hand-written parsers on thousands of corrupted programs) and from 40+ examples that are run on every engine. Writing it found real bugs in the implementations.
 
 ---
 

@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 609 tests + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
+&nbsp;·&nbsp; 813 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -33,10 +33,10 @@ run one step at a time.
 | **`plainlang.py`** | A second, independent implementation: a tree-walking command-line interpreter and REPL. |
 | **`plainvm.py`** | A **third** backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
 | **`plaincheck.py`** | A static analyzer + **gradual type checker** — a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code, and type errors like text-minus-a-number). |
-| **`test_plainlang.py`** | A 48-case test suite covering the language and its error messages. |
-| **`test_vm.py`** | A 34-case **cross-validation** suite: every program is run through both the tree-walker and the VM and asserted to produce identical output. |
+| **`test_plainlang.py`** | The reference test suite: language behaviour and error messages, including a regression test for every bug the fuzzers and the spec have found. |
+| **`test_vm.py`** | **Cross-validation**: every program is run through both the tree-walker and the VM and must produce identical output — including the wording of every error. |
 | **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
-| **`test_check.py`** | An 18-case suite for the static analyzer (and its precision — clean code must not be flagged). |
+| **`test_check.py`** | Tests for the static analyzer and type checker (including its precision — clean code must not be flagged). |
 | **`test_js.js`** | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
 | **`fuzz.py`** | A **differential fuzzer** — a type-aware generator emits random programs across the whole language and checks the tree-walker and VM agree on every one. |
 | **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
@@ -52,6 +52,11 @@ run one step at a time.
 | **`lessons.js`** / **`test_lessons.js`** | The Workbook: a 29-lesson, 6-unit interactive course. Every lesson has a reference solution, and the tests prove each solution passes its own checker and each untouched starter does not. |
 | **`build_docs.py`** / **`docs_content.py`** / **`test_docs.py`** | The documentation site. Every example is *run* when the site is built and its real output printed beneath it; tests check that each example works, that the Python and JS engines agree, and that every keyword is documented. `pages.yml` deploys it with the playground to GitHub Pages. |
 | **`test_a11y.py`** | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
+| **`SPEC.md`** / **`grammar.ebnf`** | The **language specification**, generated from an executable grammar and from examples that are run on every engine. |
+| **`plainspec.py`** / **`spec_fuzz.py`** / **`test_spec.py`** | The grammar as a recognizer, a differential tester that pits it against both hand-written parsers on thousands of corrupted programs, and the test suite that checks every rule of the spec. |
+| **`plain.py`** | **One command for everything**: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
+| **`run_tests.py`** / **`test_meta.py`** | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |
+| **`CONTRIBUTING.md`** / **`CHANGELOG.md`** | How the four engines fit together and the checklist for adding a feature; the release history. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
@@ -208,14 +213,19 @@ Or just open `playground.html` directly in a browser.
 
 **The command line:**
 ```bash
-python plainlang.py demo.plang     # run a program
-python plainlang.py                # interactive REPL
-python plainlang.py --help         # full syntax reference
+python plain.py run demo.plang     # run a program
+python plain.py repl               # interactive prompt
+python plain.py check demo.plang   # find mistakes before running
+python plain.py fmt --write demo.plang
+python plain.py wasm demo.plang    # compile to WebAssembly
+python plain.py help               # everything else
 ```
+Each command is the tool of the same name (`plainlang.py`, `plaincheck.py`, …) run exactly as if you'd typed it, so `python plainlang.py demo.plang` still works too.
 
 **The tests:**
 ```bash
-python test_plainlang.py
+python run_tests.py            # every suite CI runs
+python run_tests.py --quick    # skip the slow randomized ones
 ```
 
 ---
@@ -270,7 +280,20 @@ checked for identical output on both engines. This has found real bugs twice:
    `6.64712e-05` where JavaScript printed `0.0000664712`; and `power of 0 and -1` crashed the
    interpreter with a raw exception. Each is fixed once, in every engine, with a regression test.
 
-Now 20,000+ random programs across the full language agree.
+5. The spec and a stricter fuzzer found four more. The executable specification turned up a
+   parser leniency (`"{1 2}"` silently dropped the `2`) and a VM/interpreter split (a function that
+   never `return`s, used as a value, printed `nothing` on the VM but raised the right error
+   everywhere else). And the fuzzer itself was audited: a bug in *my generator* meant 99% of its
+   programs were syntactically invalid, so the engines "agreed" on the syntax error and the run
+   proved little — `fuzz.py` now fails loudly unless at least 95% of its programs are valid. Once the
+   programs were real, deeper bugs surfaced: an unbounded-integer crash at 4,300 digits (numbers are
+   now 64-bit floats in every engine, with a friendly "too big" error), and text that could grow
+   until the machine ran out of memory (text now has a ceiling too, and replacing empty text is an
+   error — Python and JavaScript disagreed about what it even meant).
+
+Every one of these is fixed once, in every engine, with a regression test. After the fixes, 30,000
+valid random programs agree between the interpreter and the VM, and 10,000 between the interpreter
+and real WebAssembly — with no magnitude exemptions.
 
 ### Seeing the bytecode
 
@@ -397,7 +420,7 @@ is built from `floor`); divide-by-zero and friends call a host `fail` instead of
 It's held to the same standard as every other engine: `fuzz_wasm.py` generates random programs
 and checks the interpreter and **real WebAssembly** agree on every one — output *and* the point
 where a runtime error stops the program. Known, documented limit: the WASM backend uses doubles,
-so integers beyond 2^53 lose precision where the interpreter's integers are exact.
+and numbers are 64-bit floats in *every* engine, so the same program prints the same digits everywhere.
 
 ### Editor tooling
 
