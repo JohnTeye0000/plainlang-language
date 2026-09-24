@@ -23,6 +23,7 @@ SUITES = [
     ("test_diagnostics", ["python", "test_diagnostics.py"], False),
     ("test_check", ["python", "test_check.py"], False),
     ("test_fuzz", ["python", "test_fuzz.py"], True),
+    ("test_fuzz_js", ["python", "test_fuzz_js.py"], True),
     ("test_fmt", ["python", "test_fmt.py"], False),
     ("test_imports", ["python", "test_imports.py"], False),
     ("test_lsp", ["python", "test_lsp.py"], False),

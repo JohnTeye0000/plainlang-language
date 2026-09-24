@@ -101,6 +101,9 @@ PROGRAMS = {
     "junk after the value inside braces": 'say "{1 2}"',
     # found by fuzzing and by the executable spec
     "replacing empty text": 'say replace "" by "x" in "abc"',
+    "list concatenation has a ceiling": 'set xs to list of 1\nrepeat 30 times\nset xs to xs plus xs\nend\nsay length of xs',
+    "join is sized before it is built": 'set s to "abcdefghij"\nrepeat 20 times\nset s to s plus s\nend\nsay length of (join (list of 1, 2, 3, 4, 5, 6, 7, 8, 9, 10) by s)',
+    "replace is sized before it is built": 'set t to "aaaaaaaaaa"\nrepeat 20 times\nset t to t plus t\nend\nset u to "xxxxxxxxxx"\nrepeat 5 times\nset u to u plus u\nend\nsay length of (replace "a" by u in t)',
     "text has a ceiling": 'set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t',
     "a function without return can't be used as a value": 'define quiet with n\nset x to n\nend\nsay quiet with 1',
     "a function without return is fine as a statement": 'define quiet with n\nset x to n\nend\ncall quiet with 1\nsay "ok"',

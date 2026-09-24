@@ -24,6 +24,8 @@ jobs:
         run: python test_check.py
       - name: Differential fuzzing (both engines must agree)
         run: python test_fuzz.py
+      - name: Differential fuzzing (Python vs the JavaScript engine)
+        run: python test_fuzz_js.py
       - name: Code formatter
         run: python test_fmt.py
       - name: Multi-file imports

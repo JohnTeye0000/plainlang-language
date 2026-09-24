@@ -826,7 +826,10 @@
           if (t.length > MAX_TEXT) throw tooLong(this.currentLine);
           return t;
         }
-        if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
+        if (Array.isArray(a) && Array.isArray(b)) {
+          if (a.length + b.length > MAX_LIST) throw tooLongList(this.currentLine);
+          return a.concat(b);
+        }
         this.needNumbers("plus", a, b); return this.finite(a + b);
       }
       if (op === "-") { this.needNumbers("minus", a, b); return this.finite(a - b); }
@@ -883,15 +886,18 @@
       }
       if (name === "join") {
         if (!Array.isArray(args[0])) throw new PlainLangError("'join' works on a list.", this.currentLine);
-        const joined = args[0].map(toStr).join(toStr(args[1]));
-        if (joined.length > MAX_TEXT) throw tooLong(this.currentLine);
-        return joined;
+        const parts = args[0].map(toStr), sep = toStr(args[1]);
+        let size = sep.length * Math.max(parts.length - 1, 0);      // sized BEFORE building it
+        for (const p of parts) size += p.length;
+        if (size > MAX_TEXT) throw tooLong(this.currentLine);
+        return parts.join(sep);
       }
       if (name === "replace") {
         if (toStr(args[0]) === "") throw new PlainLangError("The text to replace can't be empty.", this.currentLine);
-        const replaced = toStr(args[2]).split(toStr(args[0])).join(toStr(args[1]));
-        if (replaced.length > MAX_TEXT) throw tooLong(this.currentLine);
-        return replaced;
+        const text = toStr(args[2]), old = toStr(args[0]), rep = toStr(args[1]);
+        const pieces = text.split(old);                                  // pieces.length - 1 hits
+        if (text.length + (pieces.length - 1) * (rep.length - old.length) > MAX_TEXT) throw tooLong(this.currentLine);
+        return pieces.join(rep);
       }
       if (name === "position") return toStr(args[1]).indexOf(toStr(args[0])) + 1;
       if (name === "contains") {
@@ -986,6 +992,8 @@
     return Math.sign(x) * Math.floor(Math.abs(x) + 0.5);
   }
   const MAX_TEXT = 10000000;
+  const MAX_LIST = 10000000;
+  function tooLongList(line) { return new PlainLangError("That list is too long for PlainLang to hold.", line); }
   function tooLong(line) { return new PlainLangError("That text is too long for PlainLang to hold.", line); }
   function tooBig(line) { return new PlainLangError("That number is too big for PlainLang to hold.", line); }
   function formatNumber(v) {

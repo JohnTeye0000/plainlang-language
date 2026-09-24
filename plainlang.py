@@ -81,6 +81,30 @@ def check_text(s, line=None):
     return s
 
 
+_MAX_LIST = 10_000_000
+
+
+def check_list_size(n, line=None):
+    """Lists have a ceiling too (found by fuzzing: 'xs plus xs' in a loop doubles forever)."""
+    if n > _MAX_LIST:
+        raise PlainLangError("That list is too long for PlainLang to hold.", line)
+
+
+def joined_text(sep, items, to_str, line=None):
+    """join, but sized BEFORE it is built so a huge separator can't exhaust memory."""
+    parts = [to_str(x) for x in items]
+    if sum(map(len, parts)) + len(sep) * max(len(parts) - 1, 0) > _MAX_TEXT:
+        raise PlainLangError("That text is too long for PlainLang to hold.", line)
+    return sep.join(parts)
+
+
+def replaced_text(text, old, new, line=None):
+    """replace, sized BEFORE it is built (each hit swaps len(old) chars for len(new))."""
+    if len(text) + text.count(old) * (len(new) - len(old)) > _MAX_TEXT:
+        raise PlainLangError("That text is too long for PlainLang to hold.", line)
+    return text.replace(old, new)
+
+
 def format_number(v):
     """How every engine prints a float: whole numbers without a decimal point,
     everything else rounded to 10 places, and never in scientific notation
@@ -1233,6 +1257,7 @@ class Interpreter:
             if isinstance(a, str) or isinstance(b, str):
                 return check_text(self.to_str(a) + self.to_str(b), self.current_line)
             if isinstance(a, list) and isinstance(b, list):
+                check_list_size(len(a) + len(b), self.current_line)
                 return a + b
             self._need_numbers("plus", a, b)
             return check_number(a + b, self.current_line)
@@ -1296,12 +1321,12 @@ class Interpreter:
             seq = args[0]
             if not isinstance(seq, list):
                 raise PlainLangError("'join' works on a list.", self.current_line)
-            return check_text(self.to_str(args[1]).join(self.to_str(x) for x in seq), self.current_line)
+            return joined_text(self.to_str(args[1]), seq, self.to_str, self.current_line)
         if name == "replace":
             old, new, text = self.to_str(args[0]), self.to_str(args[1]), self.to_str(args[2])
             if old == "":
                 raise PlainLangError("The text to replace can't be empty.", self.current_line)
-            return check_text(text.replace(old, new), self.current_line)
+            return replaced_text(text, old, new, self.current_line)
         if name == "position":
             part, text = self.to_str(args[0]), self.to_str(args[1])
             return text.find(part) + 1

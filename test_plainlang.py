@@ -126,6 +126,12 @@ expect_output("a well-formed interpolation still works", 'say "sum {1 plus 2}!"'
 expect_error("replacing empty text", 'say replace "" by "x" in "abc"', "can't be empty")
 expect_error("text has a ceiling",
     'set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t', "too long")
+# regression: lists have a ceiling, and join is sized BEFORE it is built (found by the
+# Python-vs-JavaScript fuzzer: a huge separator times a long list ran out of memory)
+expect_error("list concatenation has a ceiling", 'set xs to list of 1\nrepeat 30 times\nset xs to xs plus xs\nend\nsay length of xs', "too long")
+expect_error("join is sized before it is built", 'set s to "abcdefghij"\nrepeat 20 times\nset s to s plus s\nend\nsay length of (join (list of 1, 2, 3, 4, 5, 6, 7, 8, 9, 10) by s)', "too long")
+expect_error("replace is sized before it is built", 'set t to "aaaaaaaaaa"\nrepeat 20 times\nset t to t plus t\nend\nset u to "xxxxxxxxxx"\nrepeat 5 times\nset u to u plus u\nend\nsay length of (replace "a" by u in t)', "too long")
+expect_output("a normal join still works", 'say join (list of 1, 2, 3) by "-"', ["1-2-3"])
 expect_error("a function without return can't be used as a value",
     'define quiet with n\nset x to n\nend\nsay quiet with 1', "didn't 'return'")
 expect_error("ordering still rejects incompatible types",

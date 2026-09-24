@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 813 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
+&nbsp;·&nbsp; 824 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -53,6 +53,7 @@ run one step at a time.
 | **`build_docs.py`** / **`docs_content.py`** / **`test_docs.py`** | The documentation site. Every example is *run* when the site is built and its real output printed beneath it; tests check that each example works, that the Python and JS engines agree, and that every keyword is documented. `pages.yml` deploys it with the playground to GitHub Pages. |
 | **`test_a11y.py`** | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
 | **`SPEC.md`** / **`grammar.ebnf`** | The **language specification**, generated from an executable grammar and from examples that are run on every engine. |
+| **`fuzz_js.py`** / **`test_fuzz_js.py`** | A differential fuzzer for the JavaScript engine (the browser's, with its own parser): the same random programs run on it and on the Python interpreter and must agree. |
 | **`plainspec.py`** / **`spec_fuzz.py`** / **`test_spec.py`** | The grammar as a recognizer, a differential tester that pits it against both hand-written parsers on thousands of corrupted programs, and the test suite that checks every rule of the spec. |
 | **`plain.py`** | **One command for everything**: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
 | **`run_tests.py`** / **`test_meta.py`** | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |

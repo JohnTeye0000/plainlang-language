@@ -9,6 +9,11 @@ each maps to a phase of [ROADMAP.md](ROADMAP.md).
 
 ## [0.5.0] — 2026‑09‑24  ·  Product, reach, and a specification
 
+- **The JavaScript engine joined the fuzzing** (`fuzz_js.py`): 8,000 random programs agree with the Python
+  interpreter. It found that `join`, `replace` and list concatenation built their result before checking
+  its size, so a runaway program could exhaust memory; all three are now sized first, and lists have a
+  ten-million-item ceiling like text.
+
 - **Language specification** (`SPEC.md`), generated from an *executable* grammar
   (`grammar.ebnf`, run by `plainspec.py`) and from 40+ examples verified on every engine.
   `spec_fuzz.py` differentially tests the grammar against both hand‑written parsers on

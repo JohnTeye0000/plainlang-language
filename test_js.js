@@ -131,6 +131,14 @@ test("numbers are doubles: big values print exact digits, overflow is a friendly
   assert.ok(/too big/.test(out("say power of 10 and 400").error));
   assert.ok(/too big/.test(out("set x to 10\nrepeat 400 times\nset x to x multiplied by 10\nend\nsay x").error));
 });
+test("replace is sized before it is built", () => {
+  assert.ok(/too long/.test(out('set t to "aaaaaaaaaa"\nrepeat 20 times\nset t to t plus t\nend\nset u to "xxxxxxxxxx"\nrepeat 5 times\nset u to u plus u\nend\nsay length of (replace "a" by u in t)').error));
+});
+test("lists have a ceiling and join is sized before it is built", () => {
+  assert.ok(/list is too long/.test(out('set xs to list of 1\nrepeat 30 times\nset xs to xs plus xs\nend\nsay length of xs').error));
+  assert.ok(/text is too long/.test(out('set s to "abcdefghij"\nrepeat 20 times\nset s to s plus s\nend\nsay length of (join (list of 1, 2, 3, 4, 5, 6, 7, 8, 9, 10) by s)').error));
+  assert.deepStrictEqual(out('say join (list of 1, 2, 3) by "-"').output, ["1-2-3"]);
+});
 test("replacing empty text is an error; text has a ceiling", () => {
   assert.ok(/can't be empty/.test(out('say replace "" by "x" in "abc"').error));
   assert.ok(/too long/.test(out('set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t').error));

@@ -874,6 +874,7 @@ class VM:
             if isinstance(a, str) or isinstance(b, str):
                 return pl.check_text(to_str(a) + to_str(b), self.line)
             if isinstance(a, list) and isinstance(b, list):
+                pl.check_list_size(len(a) + len(b), self.line)
                 return a + b
             self.need_numbers("plus", a, b); return pl.check_number(a + b, self.line)
         if op == "SUB": self.need_numbers("minus", a, b); return pl.check_number(a - b, self.line)
@@ -935,11 +936,11 @@ class VM:
         if name == "join":
             if not isinstance(args[0], list):
                 raise PlainLangError("'join' works on a list.", self.line)
-            return pl.check_text(to_str(args[1]).join(to_str(x) for x in args[0]), self.line)
+            return pl.joined_text(to_str(args[1]), args[0], to_str, self.line)
         if name == "replace":
             if to_str(args[0]) == "":
                 raise PlainLangError("The text to replace can't be empty.", self.line)
-            return pl.check_text(to_str(args[2]).replace(to_str(args[0]), to_str(args[1])), self.line)
+            return pl.replaced_text(to_str(args[2]), to_str(args[0]), to_str(args[1]), self.line)
         if name == "position":
             return to_str(args[1]).find(to_str(args[0])) + 1
         if name == "contains":
