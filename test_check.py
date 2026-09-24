@@ -99,6 +99,33 @@ check("reports several syntax errors at once (recovery)", len(diags(_two)) >= 2,
 clean("a valid program is still clean after recovery was added",
       'set x to 5\nif x is greater than 3 then\nsay "big"\nend')
 
+# regression: 'plus' also joins text and lists, so an unknown + unknown is unknown, never "number"
+clean("plus of two unknowns is not assumed to be a number",
+      'define f with a and b\nreturn length of (a plus b)\nend\nsay f with "x" and "y"')
+
+# ── property test: the README promises "correct programs are never flagged" ─────────
+# Generate thousands of programs; whenever one RUNS CLEANLY, the checker must report no
+# *errors* (warnings such as unused variables are fine). Found the bug above.
+print("Precision, checked by fuzzing")
+import random
+import fuzz, fuzz_wasm
+import plainlang as pl
+
+checked = 0
+false_positives = []
+for gen in (fuzz.Generator, fuzz_wasm.Generator):
+    for k in range(400):
+        src = gen(random.Random(k)).program()
+        out = []
+        ok, _ = pl.run_source(src, on_output=out.append)
+        if not ok:
+            continue
+        checked += 1
+        errs = [d for d in diags(src) if getattr(d, "severity", "error") == "error"]
+        if errs:
+            false_positives.append((errs[0].message, src.split("\n")[(errs[0].line or 1) - 1][:100]))
+check(f"no false-positive errors on {checked} programs that run cleanly", not false_positives, false_positives[:2])
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)

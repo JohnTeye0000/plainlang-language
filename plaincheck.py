@@ -357,7 +357,9 @@ class Analyzer:
             if lt == "text" or rt == "text": return "text"
             if lt == "list" and rt == "list": return "list"
             self._require_number(lt, "plus", line); self._require_number(rt, "plus", line)
-            return "number"
+            # 'plus' also joins text and lists, so with an unknown side the result is unknown --
+            # calling it a number made `length of (s plus t)` a false-positive error
+            return "number" if lt == "number" and rt == "number" else None
         name = {"-": "minus", "*": "multiplied by", "/": "divided by"}[opc]
         self._require_number(lt, name, line); self._require_number(rt, name, line)
         return "number"
