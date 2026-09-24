@@ -38,7 +38,7 @@ Grow PlainLang from "teaching toy" to genuinely expressive:
 - [x] A **text/string library**: split, join, trim, replace, position, contains — *done across all engines, cross-validated*
 - [x] Numbers & lists toolbox: sum, average, smallest, largest, first, last, reverse, sorted, remainder — *done across all engines, cross-validated*
 - [x] More math: `floor`, `ceiling`, `power`, `min`, `max` — cross-validated across all three engines; also fixed a real equality-semantics bug the fuzzer found along the way (`is equal to` between mismatched types incorrectly raised, and JS compared lists/records by reference instead of value)
-- [ ] More standard library: dates
+- [ ] More standard library: dates — *deliberately deferred.* Every new keyword is reserved in all four engines, and `today`, `days`, `weekday` are exactly the names a beginner reaches for as variables. Revisit once keywords can be contextual (only reserved where the grammar expects them), or as a `import "dates.plang"` library written in PlainLang itself.
 - [x] Modules / imports — `import "utils.plang"` pulls another file's function definitions into the current program (CLI-focused — the browser has no filesystem); resolves transitive and diamond imports, rejects cycles and non-library files, cross-validated between the tree-walker and the VM
 - [x] Release **v0.2** — tagged `v0.2.0` (see [CHANGELOG.md](CHANGELOG.md)); the one open Phase 1 item is a dates library
 
