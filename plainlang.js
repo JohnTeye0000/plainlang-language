@@ -154,7 +154,9 @@
           s += "."; j++;
           while (j < n && isDigit(source[j])) { s += source[j]; j++; }
         }
-        tokens.push(["NUMBER", parseFloat(s), line, col, j - i]);
+        const num = parseFloat(s);
+        if (!Number.isFinite(num)) throw new PlainLangError("That number is too big for PlainLang to hold.", line, null, col, j - i);
+        tokens.push(["NUMBER", num, line, col, j - i]);
         i = j;
         continue;
       }
@@ -467,7 +469,12 @@
           const exprSrc = text.slice(i + 1, j).trim();
           if (!exprSrc) throw new PlainLangError("There's an empty {} in this text.", line, "Put a variable or value between the braces.");
           let node;
-          try { node = new Parser(tokenize(exprSrc)).expression(); }
+          try {
+            const inner = new Parser(tokenize(exprSrc));
+            node = inner.expression();
+            if (inner.kind() !== "EOF")            // {x y} used to silently drop the 'y'
+              throw new PlainLangError(`I found ${inner.describe(inner.peek())} after the value`);
+          }
           catch (e) { throw new PlainLangError(`I couldn't understand '{${exprSrc}}': ${e.plMessage || e.message}`, line); }
           parts.push(node);
           i = j + 1;
@@ -814,17 +821,25 @@
 
     binop(op, a, b) {
       if (op === "+") {
-        if (typeof a === "string" || typeof b === "string") return toStr(a) + toStr(b);
+        if (typeof a === "string" || typeof b === "string") {
+          const t = toStr(a) + toStr(b);
+          if (t.length > MAX_TEXT) throw tooLong(this.currentLine);
+          return t;
+        }
         if (Array.isArray(a) && Array.isArray(b)) return a.concat(b);
-        this.needNumbers("plus", a, b); return a + b;
+        this.needNumbers("plus", a, b); return this.finite(a + b);
       }
-      if (op === "-") { this.needNumbers("minus", a, b); return a - b; }
-      if (op === "*") { this.needNumbers("multiplied by", a, b); return a * b; }
+      if (op === "-") { this.needNumbers("minus", a, b); return this.finite(a - b); }
+      if (op === "*") { this.needNumbers("multiplied by", a, b); return this.finite(a * b); }
       if (op === "/") {
         this.needNumbers("divided by", a, b);
         if (b === 0) throw new PlainLangError("You can't divide by zero.", this.currentLine, "Check the number you're dividing by.");
-        return a / b;
+        return this.finite(a / b);
       }
+    }
+    finite(x) {
+      if (!Number.isFinite(x)) throw tooBig(this.currentLine);
+      return x;
     }
     needNumbers(name, a, b) {
       for (const v of [a, b]) this.needNumber(name, v);
@@ -868,9 +883,16 @@
       }
       if (name === "join") {
         if (!Array.isArray(args[0])) throw new PlainLangError("'join' works on a list.", this.currentLine);
-        return args[0].map(toStr).join(toStr(args[1]));
+        const joined = args[0].map(toStr).join(toStr(args[1]));
+        if (joined.length > MAX_TEXT) throw tooLong(this.currentLine);
+        return joined;
       }
-      if (name === "replace") return toStr(args[2]).split(toStr(args[0])).join(toStr(args[1]));
+      if (name === "replace") {
+        if (toStr(args[0]) === "") throw new PlainLangError("The text to replace can't be empty.", this.currentLine);
+        const replaced = toStr(args[2]).split(toStr(args[0])).join(toStr(args[1]));
+        if (replaced.length > MAX_TEXT) throw tooLong(this.currentLine);
+        return replaced;
+      }
       if (name === "position") return toStr(args[1]).indexOf(toStr(args[0])) + 1;
       if (name === "contains") {
         if (Array.isArray(args[0])) return args[0].includes(args[1]);
@@ -884,7 +906,7 @@
         this.needNumber(name, args[0]); this.needNumber(name, args[1]);
         if (args[0] === 0 && args[1] < 0) throw new PlainLangError("You can't raise 0 to a negative power.", this.currentLine);
         if (args[0] < 0 && !Number.isInteger(args[1])) throw new PlainLangError("I can't raise a negative number to a fractional power.", this.currentLine);
-        return Math.pow(args[0], args[1]);
+        return this.finite(Math.pow(args[0], args[1]));
       }
       if (name === "min") { this.needNumber(name, args[0]); this.needNumber(name, args[1]); return Math.min(args[0], args[1]); }
       if (name === "max") { this.needNumber(name, args[0]); this.needNumber(name, args[1]); return Math.max(args[0], args[1]); }
@@ -909,7 +931,7 @@
         this.needList(v, name);
         if (name === "sum" || name === "average") {
           for (const x of v) if (typeof x !== "number") throw new PlainLangError(`'${name} of' needs a list of numbers.`, this.currentLine);
-          const total = v.reduce((a, b) => a + b, 0);
+          const total = this.finite(v.reduce((a, b) => a + b, 0));
           if (name === "sum") return total;
           if (v.length === 0) throw new PlainLangError("I can't take the average of an empty list.", this.currentLine);
           return total / v.length;
@@ -930,7 +952,13 @@
         this.needNumber(name, args[0]); this.needNumber(name, args[1]);
         const a = Math.trunc(args[0]), b = Math.trunc(args[1]);
         if (b === 0) throw new PlainLangError("You can't take a remainder when dividing by zero.", this.currentLine);
-        return a - b * Math.floor(a / b);   // floored remainder, matches Python's %
+        if (Math.abs(a) <= 9007199254740992 && Math.abs(b) <= 9007199254740992) {
+          return a - b * Math.floor(a / b);   // floored remainder, matches Python's %
+        }
+        const A = BigInt(a), B = BigInt(b);   // beyond 2**53 doubles can't do it exactly; BigInt can
+        let m = A % B;
+        if (m !== 0n && ((m < 0n) !== (B < 0n))) m += B;
+        return Number(m);
       }
     }
     needList(v, name) {
@@ -957,10 +985,13 @@
     // schoolbook rounding (2.5 -> 3, -2.5 -> -3); Math.round rounds ties toward +infinity
     return Math.sign(x) * Math.floor(Math.abs(x) + 0.5);
   }
+  const MAX_TEXT = 10000000;
+  function tooLong(line) { return new PlainLangError("That text is too long for PlainLang to hold.", line); }
+  function tooBig(line) { return new PlainLangError("That number is too big for PlainLang to hold.", line); }
   function formatNumber(v) {
     // whole numbers plainly, everything else rounded to 10 places, and never in
     // scientific notation (JS and Python disagree about when to switch to it)
-    if (Number.isInteger(v)) return Math.abs(v) < 1e21 ? String(v) : BigInt(v).toString();
+    if (Number.isInteger(v)) return Math.abs(v) <= 9007199254740992 ? String(v) : BigInt(v).toString();
     const r = roundHalfAway(v * 1e10) / 1e10;
     if (Number.isInteger(r)) return String(r);
     const text = String(r);

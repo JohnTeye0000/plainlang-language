@@ -49,6 +49,38 @@ def round_half_away(x):
     return math.copysign(math.floor(abs(x) + 0.5), x)
 
 
+_SAFE_INT = 2 ** 53
+
+
+def check_number(x, line=None):
+    """PlainLang numbers are 64-bit floats, in every engine (the browser's
+    always were; the command line used arbitrary-precision integers, so the same
+    program could print different digits -- or crash Python's int->str limit).
+    Whole numbers beyond 2**53 become floats, and a number too big for a float
+    is a friendly error rather than a traceback or 'inf'."""
+    if type(x) is int:
+        if -_SAFE_INT <= x <= _SAFE_INT:
+            return x
+        try:
+            return float(x)
+        except OverflowError:
+            raise PlainLangError("That number is too big for PlainLang to hold.", line)
+    if x - x != 0:                      # infinity or NaN
+        raise PlainLangError("That number is too big for PlainLang to hold.", line)
+    return x
+
+
+_MAX_TEXT = 10_000_000
+
+
+def check_text(s, line=None):
+    """Text has a ceiling too, so a runaway loop ends in a friendly error instead of
+    exhausting the machine's memory (found by fuzzing: replace "" by t in t, in a loop)."""
+    if len(s) > _MAX_TEXT:
+        raise PlainLangError("That text is too long for PlainLang to hold.", line)
+    return s
+
+
 def format_number(v):
     """How every engine prints a float: whole numbers without a decimal point,
     everything else rounded to 10 places, and never in scientific notation
@@ -212,7 +244,7 @@ def tokenize(source):
         elif kind == "SKIP":
             continue
         elif kind == "NUMBER":
-            tokens.append(("NUMBER", float(val) if "." in val else int(val), line, col, length))
+            tokens.append(("NUMBER", check_number(float(val) if "." in val else int(val), line), line, col, length))
         elif kind == "STRING":
             tokens.append(("STRING", val[1:-1], line, col, length))
         elif kind == "WORD":
@@ -694,7 +726,11 @@ class Parser:
                     raise PlainLangError("There's an empty {} in this text.", line,
                                          "Put a variable or value between the braces.")
                 try:
-                    node = Parser(tokenize(expr_src)).expression()
+                    inner = Parser(tokenize(expr_src))
+                    node = inner.expression()
+                    if inner.kind() != "EOF":         # {x y} used to silently drop the 'y'
+                        extra = inner.peek()
+                        raise PlainLangError(f"I found {inner._describe(extra)} after the value")
                 except PlainLangError as e:
                     raise PlainLangError(f"I couldn't understand '{{{expr_src}}}': {e.message}", line)
                 parts.append(node)
@@ -1195,22 +1231,22 @@ class Interpreter:
     def _binop(self, op, a, b):
         if op == "+":
             if isinstance(a, str) or isinstance(b, str):
-                return self.to_str(a) + self.to_str(b)
+                return check_text(self.to_str(a) + self.to_str(b), self.current_line)
             if isinstance(a, list) and isinstance(b, list):
                 return a + b
             self._need_numbers("plus", a, b)
-            return a + b
+            return check_number(a + b, self.current_line)
         if op == "-":
-            self._need_numbers("minus", a, b); return a - b
+            self._need_numbers("minus", a, b); return check_number(a - b, self.current_line)
         if op == "*":
-            self._need_numbers("multiplied by", a, b); return a * b
+            self._need_numbers("multiplied by", a, b); return check_number(a * b, self.current_line)
         if op == "/":
             self._need_numbers("divided by", a, b)
             if b == 0:
                 raise PlainLangError(
                     "You can't divide by zero.", self.current_line,
                     "Check the number you're dividing by.")
-            result = a / b
+            result = check_number(a / b, self.current_line)
             return int(result) if result == int(result) else result
 
     def _need_numbers(self, opname, a, b):
@@ -1260,10 +1296,12 @@ class Interpreter:
             seq = args[0]
             if not isinstance(seq, list):
                 raise PlainLangError("'join' works on a list.", self.current_line)
-            return self.to_str(args[1]).join(self.to_str(x) for x in seq)
+            return check_text(self.to_str(args[1]).join(self.to_str(x) for x in seq), self.current_line)
         if name == "replace":
             old, new, text = self.to_str(args[0]), self.to_str(args[1]), self.to_str(args[2])
-            return text.replace(old, new)
+            if old == "":
+                raise PlainLangError("The text to replace can't be empty.", self.current_line)
+            return check_text(text.replace(old, new), self.current_line)
         if name == "position":
             part, text = self.to_str(args[0]), self.to_str(args[1])
             return text.find(part) + 1
@@ -1273,20 +1311,25 @@ class Interpreter:
                 return part in container
             return self.to_str(part) in self.to_str(container)
         if name == "round":
-            self._need_number(name, args[0]); return int(round_half_away(args[0]))
+            self._need_number(name, args[0]); return check_number(int(round_half_away(args[0])), self.current_line)
         if name == "absolute":
             self._need_number(name, args[0]); return abs(args[0])
         if name == "floor":
-            self._need_number(name, args[0]); return math.floor(args[0])
+            self._need_number(name, args[0]); return check_number(math.floor(args[0]), self.current_line)
         if name == "ceiling":
-            self._need_number(name, args[0]); return math.ceil(args[0])
+            self._need_number(name, args[0]); return check_number(math.ceil(args[0]), self.current_line)
         if name == "power":
             self._need_number(name, args[0]); self._need_number(name, args[1])
             if args[0] == 0 and args[1] < 0:
                 raise PlainLangError("You can't raise 0 to a negative power.", self.current_line)
             if args[0] < 0 and args[1] != int(args[1]):
                 raise PlainLangError("I can't raise a negative number to a fractional power.", self.current_line)
-            r = args[0] ** args[1]
+            if args[0] not in (0, 1, -1) and args[1] * math.log2(abs(args[0])) > 1100:
+                raise PlainLangError("That number is too big for PlainLang to hold.", self.current_line)
+            try:
+                r = check_number(args[0] ** args[1], self.current_line)
+            except OverflowError:
+                raise PlainLangError("That number is too big for PlainLang to hold.", self.current_line)
             return int(r) if isinstance(r, float) and r == int(r) else r
         if name == "min":
             self._need_number(name, args[0]); self._need_number(name, args[1])
@@ -1319,7 +1362,7 @@ class Interpreter:
                     if not isinstance(x, (int, float)) or isinstance(x, bool):
                         raise PlainLangError(f"'{name} of' needs a list of numbers.", self.current_line)
                 if name == "sum":
-                    return sum(v)
+                    return check_number(sum(v), self.current_line)
                 if not v:
                     raise PlainLangError("I can't take the average of an empty list.", self.current_line)
                 r = sum(v) / len(v)

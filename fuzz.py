@@ -22,6 +22,11 @@ import plainlang as pl
 import plainvm as vm
 
 
+def lit(n):
+    """A number literal. PlainLang has no '-5' -- a negative is written 'minus 5'."""
+    return str(n) if n >= 0 else f"(minus {-n})"
+
+
 class Generator:
     """Emits random, type-correct PlainLang programs across the whole language:
     numbers, text, lists, booleans, arithmetic, string/list built-ins, if, count,
@@ -96,7 +101,7 @@ class Generator:
         if typ == "number":
             if shallow:
                 vs = self.vars_of("number")
-                return r.choice(vs) if vs and r.random() < 0.5 else str(r.randint(-5, 20))
+                return r.choice(vs) if vs and r.random() < 0.5 else lit(r.randint(-5, 20))
             c = r.choice(["op", "op", "length", "sum", "remainder", "round", "first", "call", "reduce",
                           "floor", "power", "minmax"])
             e = lambda t: self.expr(t, depth + 1)
@@ -131,7 +136,7 @@ class Generator:
                 vs = self.vars_of("list")
                 if vs and r.random() < 0.5:
                     return r.choice(vs)
-                return "list of " + ", ".join(str(r.randint(-3, 12)) for _ in range(r.randint(1, 4)))
+                return "list of " + ", ".join(lit(r.randint(-3, 12)) for _ in range(r.randint(1, 4)))
             c = r.choice(["sorted", "reverse", "split", "map"])
             e = lambda t: self.expr(t, depth + 1)
             if c == "sorted":  return f"(sorted of {e('list')})"
@@ -157,14 +162,33 @@ def run_both(source):
     return tree, vmout
 
 
+def is_valid(source):
+    try:
+        pl.Parser(pl.tokenize(source)).parse()
+        return True
+    except pl.PlainLangError:
+        return False
+
+
 def fuzz(n, seed=0):
-    """Run n random programs; return (checked, first_failure_or_None)."""
+    """Run n random programs; return (checked, first_failure_or_None).
+
+    Harness sanity check: if the generator emits programs that don't even parse,
+    both engines trivially "agree" on the syntax error and the run proves nothing.
+    (An earlier version of this generator did exactly that for 99% of programs.)
+    Fail loudly if fewer than 95% of the programs are valid.
+    """
+    valid = 0
     for k in range(n):
         rng = random.Random(seed * 1_000_003 + k)
         source = Generator(rng).program()
+        valid += is_valid(source)
         tree, vmout = run_both(source)
         if tree != vmout:
             return k, (source, tree, vmout)
+    if n >= 50 and valid < 0.95 * n:
+        raise AssertionError(f"fuzz generator is broken: only {valid}/{n} programs are valid PlainLang")
+    fuzz.last_valid = valid
     return n, None
 
 

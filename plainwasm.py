@@ -101,6 +101,7 @@ IMPORTS = [
     ("end_line", (), ()),
     ("fail", (I32, I32), ()),
     ("pow", (F64, F64), (F64,)),
+    ("rem", (F64, F64), (F64,)),      # exact remainder for operands beyond 2**53
 ]
 IMP = {name: i for i, (name, _, _) in enumerate(IMPORTS)}
 
@@ -624,6 +625,17 @@ class Compiler:
         elif t == "text":
             raise WasmUnsupported("text used as a condition is not supported by the WebAssembly backend")
 
+    def finite(self, ctx):
+        """Leave the f64 on the stack unchanged -- but fail if it overflowed to
+        infinity (x - x is 0 for every finite x and NaN for infinity)."""
+        tmp = ctx.new_local()
+        ctx.set(tmp)
+        ctx.get(tmp); ctx.get(tmp); ctx.op(F64_SUB); ctx.f64(0); ctx.op(F64_NE)
+        ctx.open(IF, BLOCK_VOID, ctx.tag())
+        self.fail(ctx, "That number is too big for PlainLang to hold.")
+        ctx.close()
+        ctx.get(tmp)
+
     def fail(self, ctx, message):
         ptr, length = self.string(message)
         ctx.i32(ptr); ctx.i32(length); ctx.op(CALL, IMP["fail"])
@@ -657,6 +669,7 @@ class Compiler:
                 self.fail(ctx, "You can't divide by zero.")
                 ctx.close()
                 ctx.get(tmp); ctx.op(F64_DIV)
+            self.finite(ctx)
             return "num"
         if op == "cmp":
             self.num(e[2], ctx, allow_bool=True); self.num(e[3], ctx, allow_bool=True)
@@ -712,8 +725,18 @@ class Compiler:
             ctx.open(IF, BLOCK_VOID, ctx.tag())
             self.fail(ctx, "You can't take a remainder when dividing by zero.")
             ctx.close()
+            # doubles can't do this exactly beyond 2**53, so huge operands go to the host
+            # (BigInt), exactly as the interpreter's integers would
+            big = 9007199254740992.0
+            ctx.get(ta); ctx.op(F64_ABS); ctx.f64(big); ctx.op(F64_GT)
+            ctx.get(tb); ctx.op(F64_ABS); ctx.f64(big); ctx.op(F64_GT)
+            ctx.op(0x72)                                     # i32.or
+            ctx.open(IF, F64, ctx.tag())
+            ctx.get(ta); ctx.get(tb); ctx.op(CALL, IMP["rem"])
+            ctx.else_()
             ctx.get(ta); ctx.get(tb); ctx.get(ta); ctx.get(tb); ctx.op(F64_DIV)
             ctx.op(F64_FLOOR); ctx.op(F64_MUL); ctx.op(F64_SUB)
+            ctx.close()
         elif name == "power":
             base, exp = ctx.new_local(), ctx.new_local()
             self.num(args[0], ctx); ctx.set(base)
@@ -731,6 +754,7 @@ class Compiler:
             self.fail(ctx, "I can't raise a negative number to a fractional power.")
             ctx.close()
             ctx.get(base); ctx.get(exp); ctx.op(CALL, IMP["pow"])
+            self.finite(ctx)
         return "num"
 
 

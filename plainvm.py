@@ -382,6 +382,7 @@ class Compiler:
 
     def e_call(self, node):
         self.call(node)
+        self.emit("NEEDVAL", node[1])      # as a value, the function must have returned something
 
     def call(self, node):
         _, name, args = node
@@ -651,6 +652,7 @@ class VM:
         functions = self.program.functions
         on_step = self.on_step
         MISS = _MISS
+        SAFE = pl._SAFE_INT
         frames = []                 # saved (code, consts, locals, ip) per call
         ip = 0
         steps = 0
@@ -682,15 +684,24 @@ class VM:
                 else: floc[arg] = pop()
             elif op == "ADD":
                 b = pop(); a = pop(); ta = type(a); tb = type(b)
-                if (ta is int or ta is float) and (tb is int or tb is float): push(a + b)
+                if (ta is int or ta is float) and (tb is int or tb is float):
+                    r = a + b
+                    if r > SAFE or r < -SAFE or r - r != 0: self.line = line; r = pl.check_number(r, line)
+                    push(r)
                 else: self.line = line; push(self.arith("ADD", a, b))
             elif op == "SUB":
                 b = pop(); a = pop(); ta = type(a); tb = type(b)
-                if (ta is int or ta is float) and (tb is int or tb is float): push(a - b)
+                if (ta is int or ta is float) and (tb is int or tb is float):
+                    r = a - b
+                    if r > SAFE or r < -SAFE or r - r != 0: self.line = line; r = pl.check_number(r, line)
+                    push(r)
                 else: self.line = line; push(self.arith("SUB", a, b))
             elif op == "MUL":
                 b = pop(); a = pop(); ta = type(a); tb = type(b)
-                if (ta is int or ta is float) and (tb is int or tb is float): push(a * b)
+                if (ta is int or ta is float) and (tb is int or tb is float):
+                    r = a * b
+                    if r > SAFE or r < -SAFE or r - r != 0: self.line = line; r = pl.check_number(r, line)
+                    push(r)
                 else: self.line = line; push(self.arith("MUL", a, b))
             elif op == "LT":
                 b = pop(); a = pop()
@@ -752,6 +763,9 @@ class VM:
                 self.on_output(to_str(pop()))
             elif op == "POP":
                 pop()
+            elif op == "NEEDVAL":
+                if stack[-1] is None:
+                    raise PlainLangError(f"The function '{arg}' was used as a value, but it didn't 'return' anything.", line)
             elif op == "TRUE":
                 push(True)
             elif op == "FALSE":
@@ -858,17 +872,17 @@ class VM:
     def arith(self, op, a, b):
         if op == "ADD":
             if isinstance(a, str) or isinstance(b, str):
-                return to_str(a) + to_str(b)
+                return pl.check_text(to_str(a) + to_str(b), self.line)
             if isinstance(a, list) and isinstance(b, list):
                 return a + b
-            self.need_numbers("plus", a, b); return a + b
-        if op == "SUB": self.need_numbers("minus", a, b); return a - b
-        if op == "MUL": self.need_numbers("multiplied by", a, b); return a * b
+            self.need_numbers("plus", a, b); return pl.check_number(a + b, self.line)
+        if op == "SUB": self.need_numbers("minus", a, b); return pl.check_number(a - b, self.line)
+        if op == "MUL": self.need_numbers("multiplied by", a, b); return pl.check_number(a * b, self.line)
         if op == "DIV":
             self.need_numbers("divided by", a, b)
             if b == 0:
                 raise PlainLangError("You can't divide by zero.", self.line, "Check the number you're dividing by.")
-            r = a / b
+            r = pl.check_number(a / b, self.line)
             return int(r) if r == int(r) else r
 
     def need_numbers(self, name, a, b):
@@ -921,26 +935,33 @@ class VM:
         if name == "join":
             if not isinstance(args[0], list):
                 raise PlainLangError("'join' works on a list.", self.line)
-            return to_str(args[1]).join(to_str(x) for x in args[0])
+            return pl.check_text(to_str(args[1]).join(to_str(x) for x in args[0]), self.line)
         if name == "replace":
-            return to_str(args[2]).replace(to_str(args[0]), to_str(args[1]))
+            if to_str(args[0]) == "":
+                raise PlainLangError("The text to replace can't be empty.", self.line)
+            return pl.check_text(to_str(args[2]).replace(to_str(args[0]), to_str(args[1])), self.line)
         if name == "position":
             return to_str(args[1]).find(to_str(args[0])) + 1
         if name == "contains":
             if isinstance(args[0], list):
                 return args[1] in args[0]
             return to_str(args[1]) in to_str(args[0])
-        if name == "round":     self.need_number(name, args[0]); return int(pl.round_half_away(args[0]))
+        if name == "round":     self.need_number(name, args[0]); return pl.check_number(int(pl.round_half_away(args[0])), self.line)
         if name == "absolute":  self.need_number(name, args[0]); return abs(args[0])
-        if name == "floor":     self.need_number(name, args[0]); return math.floor(args[0])
-        if name == "ceiling":   self.need_number(name, args[0]); return math.ceil(args[0])
+        if name == "floor":     self.need_number(name, args[0]); return pl.check_number(math.floor(args[0]), self.line)
+        if name == "ceiling":   self.need_number(name, args[0]); return pl.check_number(math.ceil(args[0]), self.line)
         if name == "power":
             self.need_number(name, args[0]); self.need_number(name, args[1])
             if args[0] == 0 and args[1] < 0:
                 raise PlainLangError("You can't raise 0 to a negative power.", self.line)
             if args[0] < 0 and args[1] != int(args[1]):
                 raise PlainLangError("I can't raise a negative number to a fractional power.", self.line)
-            r = args[0] ** args[1]
+            if args[0] not in (0, 1, -1) and args[1] * math.log2(abs(args[0])) > 1100:
+                raise PlainLangError("That number is too big for PlainLang to hold.", self.line)
+            try:
+                r = pl.check_number(args[0] ** args[1], self.line)
+            except OverflowError:
+                raise PlainLangError("That number is too big for PlainLang to hold.", self.line)
             return int(r) if isinstance(r, float) and r == int(r) else r
         if name == "min":
             self.need_number(name, args[0]); self.need_number(name, args[1])
@@ -971,7 +992,7 @@ class VM:
                     if not isinstance(x, (int, float)) or isinstance(x, bool):
                         raise PlainLangError(f"'{name} of' needs a list of numbers.", self.line)
                 if name == "sum":
-                    return sum(v)
+                    return pl.check_number(sum(v), self.line)
                 if not v:
                     raise PlainLangError("I can't take the average of an empty list.", self.line)
                 r = sum(v) / len(v)

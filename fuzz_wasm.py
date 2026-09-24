@@ -12,15 +12,10 @@ way when a program hits a runtime error like division by zero.
 """
 
 import random
-import re
 import sys
 
 import plainlang as pl
 import plainwasm as pw
-
-
-# numbers of 15+ digits are beyond what a double holds exactly
-BIG = re.compile(r"\d{15,}")
 
 
 def lit(n):
@@ -149,8 +144,6 @@ def compare(programs):
     results = pw.run_wasm_batch(modules)
     for src, res in zip(programs, results):
         tree_out, tree_err = interp(src)
-        if any(BIG.search(line) for line in tree_out + res["out"]):
-            continue        # past 2**53 the interpreter's exact integers and f64 legitimately differ
         if tree_out != res["out"] or tree_err != (res["error"] is not None):
             return src, (tree_out, tree_err), (res["out"], res["error"])
     return None

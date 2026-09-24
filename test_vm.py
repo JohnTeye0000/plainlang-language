@@ -90,6 +90,20 @@ PROGRAMS = {
     "no scientific notation": 'say 1 divided by 1000000\nsay 1 divided by 1000000000000\nsay 5 divided by 100000000000',
     "zero to a negative power": 'say power of 0 and (minus 1)',
     "negative base to a fractional power": 'say power of (minus 8) and 0.5',
+    # numbers are 64-bit floats in every engine
+    "big numbers print the digits of the double": 'say power of 2 and 100\nsay power of 2 and 60',
+    "factorial of 25": 'define f with n\nif n is at most 1 then\nreturn 1\nend\nreturn n multiplied by (f with (n minus 1))\nend\nsay f with 25',
+    "literal beyond 2**53": 'say 9007199254740993',
+    "too big: power": 'say power of 10 and 400',
+    "too big: repeated multiplication": 'set x to 10\nrepeat 400 times\nset x to x multiplied by 10\nend\nsay x',
+    "too big: sum": 'say sum of (list of power of 10 and 300, power of 10 and 300, power of 10 and 308, power of 10 and 308)',
+    "huge remainder is exact": 'say remainder of (power of 2 and 100) and 7',
+    "junk after the value inside braces": 'say "{1 2}"',
+    # found by fuzzing and by the executable spec
+    "replacing empty text": 'say replace "" by "x" in "abc"',
+    "text has a ceiling": 'set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t',
+    "a function without return can't be used as a value": 'define quiet with n\nset x to n\nend\nsay quiet with 1',
+    "a function without return is fine as a statement": 'define quiet with n\nset x to n\nend\ncall quiet with 1\nsay "ok"',
     "match subject/case type mismatch never errors":
         'match "hi"\nwhen 1 then\nsay "num"\notherwise\nsay "other"\nend',
     "stop exits loop": 'count i from 1 to 9\nif i is greater than 3 then\nstop\nend\nsay i\nend',

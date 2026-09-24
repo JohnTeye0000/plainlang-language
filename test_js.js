@@ -123,6 +123,22 @@ test("numbers never print in scientific notation", () => {
     out('say 1 divided by 1000000\nsay 1 divided by 1000000000000\nsay 5 divided by 100000000000').output,
     ["0.000001", "0", "0.0000000001"]);
 });
+test("numbers are doubles: big values print exact digits, overflow is a friendly error", () => {
+  assert.deepStrictEqual(out("say power of 2 and 100\nsay power of 2 and 60").output,
+    ["1267650600228229401496703205376", "1152921504606846976"]);
+  assert.deepStrictEqual(out("say 9007199254740993").output, ["9007199254740992"]);
+  assert.deepStrictEqual(out("say remainder of (power of 2 and 100) and 7").output, ["2"]);
+  assert.ok(/too big/.test(out("say power of 10 and 400").error));
+  assert.ok(/too big/.test(out("set x to 10\nrepeat 400 times\nset x to x multiplied by 10\nend\nsay x").error));
+});
+test("replacing empty text is an error; text has a ceiling", () => {
+  assert.ok(/can't be empty/.test(out('say replace "" by "x" in "abc"').error));
+  assert.ok(/too long/.test(out('set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t').error));
+});
+test("junk after the value inside braces is rejected", () => {
+  assert.ok(/after the value/.test(out('say "{1 2}"').error));
+  assert.deepStrictEqual(out('say "sum {1 plus 2}!"').output, ["sum 3!"]);
+});
 test("power rejects zero-to-negative and negative-to-fractional", () => {
   assert.ok(/negative power/.test(out('say power of 0 and (minus 1)').error));
   assert.ok(/fractional power/.test(out('say power of (minus 8) and 0.5').error));

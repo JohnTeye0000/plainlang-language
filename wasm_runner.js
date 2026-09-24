@@ -17,7 +17,7 @@ function roundHalfAway(x) {
 
 function toStr(v) {
   // the same number formatting every PlainLang engine uses
-  if (Number.isInteger(v)) return Math.abs(v) < 1e21 ? String(v) : BigInt(v).toString();
+  if (Number.isInteger(v)) return Math.abs(v) <= 9007199254740992 ? String(v) : BigInt(v).toString();
   const r = roundHalfAway(v * 1e10) / 1e10;
   if (Number.isInteger(r)) return String(r);
   const text = String(r);
@@ -38,6 +38,12 @@ function runModule(bytes) {
       end_line: () => { out.push(line); line = ""; },
       fail: (ptr, len) => { throw new Error(text(ptr, len)); },
       pow: Math.pow,
+      rem: (a, b) => {                       // exact floored remainder beyond 2**53
+        const A = BigInt(a), B = BigInt(b);
+        let m = A % B;
+        if (m !== 0n && ((m < 0n) !== (B < 0n))) m += B;
+        return Number(m);
+      },
     },
   };
   let instance;

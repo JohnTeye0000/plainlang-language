@@ -105,6 +105,29 @@ expect_output("no scientific notation",
 # regression: power used to crash (0 ** -1) or produce a complex number
 expect_error("zero to a negative power", 'say power of 0 and (minus 1)', "negative power")
 expect_error("negative base to a fractional power", 'say power of (minus 8) and 0.5', "fractional power")
+# regression: numbers are 64-bit floats in every engine. Beyond 2**53 they print the
+# exact digits of the double, and a number too big for a double is a friendly error
+# (it used to crash Python's int->str conversion at 4300 digits, or print 'Infinity')
+expect_output("big numbers print the digits of the double",
+    'say power of 2 and 100\nsay power of 2 and 60', ["1267650600228229401496703205376", "1152921504606846976"])
+expect_output("factorial of 25 is a double, not an exact integer",
+    'define f with n\nif n is at most 1 then\nreturn 1\nend\nreturn n multiplied by (f with (n minus 1))\nend\nsay f with 25', ["15511210043330986055303168"])
+expect_output("a literal beyond 2**53 rounds like a double", 'say 9007199254740993', ["9007199254740992"])
+expect_error("too big to hold: power", 'say power of 10 and 400', "too big")
+expect_error("too big to hold: repeated multiplication",
+    'set x to 10\nrepeat 400 times\nset x to x multiplied by 10\nend\nsay x', "too big")
+expect_output("remainder stays exact for huge operands", 'say remainder of (power of 2 and 100) and 7', ["2"])
+# regression: {braces} in text must hold exactly one expression (the parsers used to
+# silently drop anything after the first one -- found by differential testing the grammar)
+expect_error("junk after the value inside braces", 'say "{1 2}"', "after the value")
+expect_output("a well-formed interpolation still works", 'say "sum {1 plus 2}!"', ["sum 3!"])
+# regression: found by fuzzing -- replacing "" in a loop grew text quadratically until Python
+# raised MemoryError; the engines also disagreed about what replacing "" even means
+expect_error("replacing empty text", 'say replace "" by "x" in "abc"', "can't be empty")
+expect_error("text has a ceiling",
+    'set t to "abcdefghij"\nrepeat 30 times\nset t to t plus t\nend\nsay length of t', "too long")
+expect_error("a function without return can't be used as a value",
+    'define quiet with n\nset x to n\nend\nsay quiet with 1', "didn't 'return'")
 expect_error("ordering still rejects incompatible types",
     'say 5 is greater than "five"', "I can't compare")
 expect_output("and", 'if true and false then\nsay "n"\notherwise\nsay "y"\nend', ["y"])
