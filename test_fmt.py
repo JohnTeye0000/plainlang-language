@@ -115,8 +115,8 @@ for gen in (fuzz.Generator, fuzz_wasm.Generator):
             changed.append(k)
         if fmt.format_source(formatted) != formatted:
             unstable.append(k)
-check(f"formatting never changes what any of {n} random programs does", not changed, changed[:5])
-check(f"formatting is idempotent on all {n} random programs", not unstable, unstable[:5])
+check(f"formatting never changes what any of {n} random programs does", not changed)
+check(f"formatting is idempotent on all {n} random programs", not unstable)
 
 print(f"\n{PASS} passed, {FAIL} failed")
 if FAIL:
