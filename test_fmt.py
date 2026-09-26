@@ -89,6 +89,35 @@ check(
     (lambda src: fmt.format_source(src) == src)(open("demo.plang", encoding="utf-8").read()),
 )
 
+print("Property test on generated programs")
+import random
+import fuzz, fuzz_wasm
+
+
+def outcome(source):
+    """What a program does, ignoring how errors quote the source line (which the formatter
+    legitimately re-indents)."""
+    out = []
+    ok, _ = pl.run_source(source, on_output=out.append)
+    if ok:
+        return True, out, None
+    lines = [l.strip() for l in out[-1].strip().split("\n") if l.strip()]
+    return False, out[:-1], lines[1] if len(lines) > 1 else lines[0]
+
+
+changed, unstable, n = [], [], 0
+for gen in (fuzz.Generator, fuzz_wasm.Generator):
+    for k in range(400):
+        src = gen(random.Random(k)).program()
+        n += 1
+        formatted = fmt.format_source(src)
+        if outcome(formatted) != outcome(src):
+            changed.append(k)
+        if fmt.format_source(formatted) != formatted:
+            unstable.append(k)
+check(f"formatting never changes what any of {n} random programs does", not changed, changed[:5])
+check(f"formatting is idempotent on all {n} random programs", not unstable, unstable[:5])
+
 print(f"\n{PASS} passed, {FAIL} failed")
 if FAIL:
     raise SystemExit(1)
