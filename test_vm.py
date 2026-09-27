@@ -281,6 +281,47 @@ opt_check("round-tripped bytecode matches a direct run (recursion + lists)",
 opt_check("a wrong-version bytecode file is rejected",
           _rejects_bad_version())
 
+# ── property tests on generated programs: the optimizer and portable bytecode were only
+# checked against a handful of hand-written cases; these run them at scale ────────────
+print("Property tests on generated programs")
+import random
+import fuzz
+import fuzz_wasm
+
+
+def _vm_result(program):
+    out = []
+    try:
+        vm.VM(program, on_output=out.append, on_input=lambda p: "", rng=lambda: 0.5).run()
+        return True, out
+    except vm.PlainLangError as e:
+        return False, (out, e.message, e.line)
+
+
+optimizer_disagreed, roundtrip_failed = [], []
+checked = 0
+for gen in (fuzz.Generator, fuzz_wasm.Generator):
+    for k in range(300):
+        src = gen(random.Random(k)).program()
+        checked += 1
+        try:
+            raw = vm.compile_program(src, optimize=False)
+            opt = vm.compile_program(src, optimize=True)
+        except Exception:
+            continue
+        if _vm_result(raw) != _vm_result(opt):
+            optimizer_disagreed.append(k)
+        try:
+            data = _json.loads(_json.dumps(vm.serialize(opt)))
+            if _vm_result(vm.deserialize(data)) != _vm_result(opt):
+                roundtrip_failed.append(k)
+        except Exception:
+            roundtrip_failed.append(k)
+opt_check(f"optimized and unoptimized bytecode agree on {checked} random programs",
+          not optimizer_disagreed, str(optimizer_disagreed[:5]))
+opt_check(f"portable bytecode round-trips {checked} random programs correctly",
+          not roundtrip_failed, str(roundtrip_failed[:5]))
+
 print(f"\n{PASS} passed, {FAIL} failed")
 import sys
 sys.exit(1 if FAIL else 0)
