@@ -51,6 +51,7 @@ identical across every engine that supports it. That is enforced by:
 | `test_wasm.py`, `fuzz_wasm.py` | WebAssembly vs the interpreter, incl. fuzzing |
 | `fuzz.py` / `test_fuzz.py` | interpreter vs VM on thousands of random programs |
 | `fuzz_js.py` / `test_fuzz_js.py` | the Python interpreter vs the JavaScript engine (the browser's) |
+| `fuzz_transpiler.py` / `test_fuzz_transpiler.py` | transpiled ("As JS") output vs the JS engine's own interpreter |
 | `test_spec.py`, `spec_fuzz.py` | the grammar vs both parsers; every example in `SPEC.md` on every engine |
 | `test_docs.py`, `test_lessons.js` | every documentation example and lesson solution really works |
 | `test_a11y.py` | WCAG contrast and structure of the playground and docs |

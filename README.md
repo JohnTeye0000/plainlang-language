@@ -54,6 +54,7 @@ run one step at a time.
 | **`test_a11y.py`** | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
 | **`SPEC.md`** / **`grammar.ebnf`** | The **language specification**, generated from an executable grammar and from examples that are run on every engine. |
 | **`fuzz_js.py`** / **`test_fuzz_js.py`** | A differential fuzzer for the JavaScript engine (the browser's, with its own parser): the same random programs run on it and on the Python interpreter and must agree. |
+| **`fuzz_transpiler.py`** / **`test_fuzz_transpiler.py`** | A differential fuzzer for the PlainLang → JavaScript transpiler: compiles random programs and runs the result, and requires it to match the JS engine's own output. |
 | **`plainspec.py`** / **`spec_fuzz.py`** / **`test_spec.py`** | The grammar as a recognizer, a differential tester that pits it against both hand-written parsers on thousands of corrupted programs, and the test suite that checks every rule of the spec. |
 | **`plain.py`** | **One command for everything**: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
 | **`run_tests.py`** / **`test_meta.py`** | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |
@@ -449,4 +450,4 @@ its own — every diagnostic comes from the same `plaincheck.py` the CLI uses. S
 - **Lists are 1-indexed** (`item 1 of list`) — beginners count from one, so the language does too.
 - **`plus` concatenates** when either side is text, so `"score: " plus 42` just works.
 - **Function arguments are separated by `and`**, which is also the boolean operator — so a boolean *inside* an argument needs parentheses: `f with (a and b)`. (This ambiguity was caught by the test suite.)
-- **The compiler favours readability over byte-for-byte fidelity** — e.g. generated JavaScript shows full floating-point precision rather than PlainLang's rounded display. It's a teaching window into "what real code looks like," not a second runtime.
+- **The compiler favours readability where it can, but not at the cost of correctness.** The generated JavaScript is fuzz-tested against the JS engine itself (`fuzz_transpiler.py`) and must match it exactly — including number formatting, rounding, and remainder — so a few runtime helpers (`plus`, `remainderOf`, `format`) exist purely to keep native JS operators from silently doing the wrong thing, without giving up otherwise-idiomatic output.

@@ -212,8 +212,11 @@ test("execution trace is recorded", () => {
 console.log("Transpiler");
 function runJS(js) {
   const captured = [];
-  vm.runInNewContext(js, { console: { log: (...a) => captured.push(a.join(" ")) }, Math });
+  vm.runInNewContext(js, { console: { log: (...a) => captured.push(a.join(" ")) }, Math }, { timeout: 2000 });
   return captured;
+}
+function agreesJS(src) {
+  return JSON.stringify(runJS(PL.compile(src))) === JSON.stringify(out(src).output);
 }
 for (const [name, src] of Object.entries({
   "vars": 'set a to 7\nsay a multiplied by 6',
@@ -228,6 +231,48 @@ for (const [name, src] of Object.entries({
     assert.deepStrictEqual(compiled, interp);
   });
 }
+
+// Regressions found by fuzz_transpiler.py -- the transpiler had never been fuzzed at
+// all before that, only checked against the handful of hand-written cases above.
+test("count counts down correctly (a naive '<=; i++' ran zero times)", () => {
+  assert.ok(agreesJS("count i from 5 to 1\nsay i\nend"));
+});
+test("a count loop's body may reassign its own variable without corrupting iteration", () => {
+  assert.ok(agreesJS("count i from 3 to 4\nset i to 9\nend\nsay i"));
+  assert.ok(agreesJS("count i from 1 to 3\ncount i from 1 to 2\nsay i\nend\nend"));
+});
+test("repeat's hidden counter can't collide with a real 'i' from a nested count", () => {
+  // repeat used the literal name 'i' for its own hidden loop counter; a nested
+  // 'count i' loop's per-pass refresh ('i = ...') then silently corrupted the
+  // OUTER repeat's iteration variable, hanging it forever.
+  assert.ok(agreesJS("repeat 1 times\ncount i from 2 to (minus 2)\nsay i\nend\nend"));
+});
+test("'stop' inside a match case nested in a loop stops the loop, not just the match", () => {
+  // match compiles to a JS switch; a bare 'break' inside a switch ends the SWITCH, not
+  // an enclosing loop, so 'stop' used this way used to silently fail to stop anything.
+  assert.deepStrictEqual(
+    out("count i from 1 to 5\nmatch i\nwhen 3 then\nstop\nend\nsay i\nend").output, ["1", "2"]);
+  assert.ok(agreesJS("count i from 1 to 5\nmatch i\nwhen 3 then\nstop\nend\nsay i\nend"));
+});
+test("'plus' rounds numbers the same way say() does (native + does not)", () => {
+  assert.ok(agreesJS('say (10 divided by 7) plus "X"'));
+});
+test("remainder is floored like every other engine, not truncated like native %", () => {
+  assert.ok(agreesJS("say remainder of (minus 4) and 20"));
+});
+test("text builtins format their argument instead of using native String()", () => {
+  assert.ok(agreesJS('define double with n\nreturn (n multiplied by 2) plus 1\nend\nsay uppercase of (double with (18 divided by 14))'));
+});
+test("sorted compares text lexicographically, not with a numeric subtraction comparator", () => {
+  assert.ok(agreesJS('say sorted of (split "world" by "")'));
+});
+test("round is half away from zero, not native Math.round (which rounds -0.5 to 0)", () => {
+  assert.ok(agreesJS("say round of (minus 0.5)"));
+});
+test("transpiled format() never uses scientific notation, for huge or tiny numbers", () => {
+  assert.ok(agreesJS("say power of 20 and 18"));
+  assert.ok(agreesJS("say 1 divided by 2430000"));
+});
 
 // ── diagnostics ──────────────────────────────────────────────────────────────
 console.log("Diagnostics");

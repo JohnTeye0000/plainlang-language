@@ -1051,7 +1051,7 @@
   // JavaScript. The point is pedagogical: a beginner sees their English program
   // become the real code a professional would write.
   class Compiler {
-    constructor() { this.lines = []; this.indent = 0; }
+    constructor() { this.lines = []; this.indent = 0; this.loopLabels = []; this.loopCounter = 0; }
     pad() { return "  ".repeat(this.indent); }
     emit(s) { this.lines.push(this.pad() + s); }
     unwrap(n) { return n[0] === "@" ? n[2] : n; }
@@ -1068,14 +1068,62 @@
       const parts = [
         "// Generated from PlainLang — the real JavaScript your program becomes.",
         "const say = (x) => console.log(format(x));",
+        // schoolbook rounding (2.5 -> 3, -2.5 -> -3): native Math.round rounds ties toward
+        // +infinity (Math.round(-0.5) === 0), which every other PlainLang engine treats as a bug.
+        "function roundHalfAway(x) { return Math.sign(x) * Math.floor(Math.abs(x) + 0.5); }",
         "function format(v) {",
         '  if (typeof v === "boolean") return v ? "true" : "false";',
-        '  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 1e10) / 1e10);',
+        '  if (typeof v === "number") {',
+        // a whole number past ~1e21 is still Number.isInteger(v) === true, but native
+        // String() switches to scientific notation there -- BigInt never does. A tiny
+        // fraction (< 1e-6) hits the same native String() behaviour from the other
+        // direction; toFixed(10) never uses it.
+        '    if (Number.isInteger(v)) return Math.abs(v) <= 9007199254740992 ? String(v) : BigInt(v).toString();',
+        "    const r = roundHalfAway(v * 1e10) / 1e10;",
+        "    if (Number.isInteger(r)) return String(r);",
+        "    const t = String(r);",
+        '    return /e/i.test(t) ? r.toFixed(10).replace(/0+$/, "").replace(/\\.$/, "") : t;',
+        "  }",
         '  if (Array.isArray(v)) return "[" + v.map(format).join(", ") + "]";',
         '  if (v && typeof v === "object") return "{" + Object.keys(v).map((k) => k + ": " + format(v[k])).join(", ") + "}";',
         "  return String(v);",
         "}",
       ];
+      // 'plus' isn't native JS '+': it joins text (rounding numbers the same way format()
+      // does -- native '+' would coerce a number to a full-precision string instead), and it
+      // enforces the same too-big / too-long ceilings as every other PlainLang engine.
+      if (/\bplus\(/.test(body)) parts.push(
+        "function plus(a, b) {",
+        '  if (typeof a === "string" || typeof b === "string") {',
+        "    const t = format(a) + format(b);",
+        '    if (t.length > 10000000) throw new Error("That text is too long for PlainLang to hold.");',
+        "    return t;",
+        "  }",
+        "  if (Array.isArray(a) && Array.isArray(b)) {",
+        '    if (a.length + b.length > 10000000) throw new Error("That list is too long for PlainLang to hold.");',
+        "    return a.concat(b);",
+        "  }",
+        "  const r = a + b;",
+        '  if (!Number.isFinite(r)) throw new Error("That number is too big for PlainLang to hold.");',
+        "  return r;",
+        "}");
+      // native '%' is truncated (sign follows the dividend); PlainLang's remainder is FLOORED
+      // (sign follows the divisor), the same rule the interpreter itself already uses.
+      if (/\bremainderOf\(/.test(body)) parts.push(
+        "function remainderOf(a, b) {",
+        "  a = Math.trunc(a); b = Math.trunc(b);",
+        '  if (b === 0) throw new Error("You can\'t take a remainder when dividing by zero.");',
+        "  if (Math.abs(a) <= 9007199254740992 && Math.abs(b) <= 9007199254740992) return a - b * Math.floor(a / b);",
+        "  const A = BigInt(a), B = BigInt(b);   // beyond 2**53 doubles can't do it exactly; BigInt can",
+        "  let m = A % B;",
+        "  if (m !== 0n && (m < 0n) !== (B < 0n)) m += B;",
+        "  return Number(m);",
+        "}");
+      // a numeric comparator (x - y) sorted text into near-random order: NaN from
+      // subtracting strings makes Array.sort a no-op. < and > compare correctly within
+      // either a same-type numbers list or a same-type text list.
+      if (/\bsortedOf\(/.test(body)) parts.push(
+        "const sortedOf = (v) => [...v].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));");
       if (/\brandomBetween\(/.test(body)) parts.push(
         "function randomBetween(a, b) {",
         "  a = Math.floor(a); b = Math.floor(b);",
@@ -1109,7 +1157,7 @@
           else if (op === "match") { for (const [, b] of s[2]) walk(b[1]); if (s[3]) walk(s[3][1]); }
           else if (op === "repeat") walk(s[2][1]);
           else if (op === "while") walk(s[2][1]);
-          else if (op === "count") walk(s[4][1]);
+          else if (op === "count") { names.add(s[1]); walk(s[4][1]); }
           else if (op === "foreach") walk(s[3][1]);
           // 'define' bodies get their own scope — don't descend
         }
@@ -1126,6 +1174,22 @@
       this.emit("}");
     }
 
+    // Every loop gets a label, and 'stop'/'skip' always break/continue that label rather than
+    // emitting a bare break/continue. For a loop with no match inside, that's exactly equivalent
+    // to a bare break/continue on the innermost loop. But 'match' compiles to a JS switch, and a
+    // bare 'break' inside a switch ends the SWITCH, not an enclosing loop -- so 'stop' used inside
+    // a match case nested in a loop would silently fail to stop it. Labels sidestep the ambiguity
+    // entirely instead of tracking "are we currently inside a switch".
+    openLoop(header, body) {
+      const label = `$L${this.loopCounter++}`;
+      this.loopLabels.push(label);
+      this.emit(`${label}: ` + header + " {");
+      this.indent++; this.stmtList(body); this.indent--;
+      this.emit("}");
+      this.loopLabels.pop();
+    }
+    currentLoopLabel() { return this.loopLabels[this.loopLabels.length - 1]; }
+
     stmt(node) {
       node = this.unwrap(node);
       const op = node[0];
@@ -1134,14 +1198,50 @@
         case "say":  this.emit(`say(${this.expr(node[1])});`); break;
         case "ask":  this.emit(`${node[2]} = ask(${this.expr(node[1])});`); break;
         case "return": this.emit(`return ${this.expr(node[1])};`); break;
-        case "repeat": this.openBlock(`for (let i = 0; i < ${this.expr(node[1])}; i++)`, node[2]); break;
-        case "while":  this.openBlock(`while (${this.expr(node[1])})`, node[2]); break;
-        case "count":  this.openBlock(
-          `for (let ${node[1]} = ${this.expr(node[2])}; ${node[1]} <= ${this.expr(node[3])}; ${node[1]}++)`, node[4]); break;
-        case "foreach": this.openBlock(`for (const ${node[1]} of ${this.expr(node[2])})`, node[3]); break;
+        case "repeat": {
+          // A hardcoded literal 'i' here can collide with a REAL PlainLang variable also
+          // named i (very common, since 'count i' is idiomatic): if a 'count i' loop is
+          // nested inside this repeat, its 'i = $iCount' refresh each pass is a plain
+          // assignment that resolves to the nearest 'i' in scope -- which used to be THIS
+          // loop's own hidden counter, silently corrupting it into an infinite loop. A
+          // $-prefixed name can't collide with any PlainLang identifier.
+          const counter = `$rep${this.loopCounter}`;
+          this.openLoop(`for (let ${counter} = 0; ${counter} < ${this.expr(node[1])}; ${counter}++)`, node[2]);
+          break;
+        }
+        case "while":  this.openLoop(`while (${this.expr(node[1])})`, node[2]); break;
+        case "count": {
+          // Two things a naive 'for (let i = start; i <= stop; i++)' gets wrong:
+          //  1. 'count' goes either direction (up when stop >= start, down otherwise) -- '<=;i++'
+          //     silently ran zero times on a descending count.
+          //  2. PlainLang's loop variable is an ordinary mutable variable: the body may reassign
+          //     it (it keeps whatever it was last set to, and that must NOT perturb which passes
+          //     still run) -- using it as the actual JS loop counter let 'set i to 9' inside the
+          //     loop corrupt iteration, exactly the bug fixed in the VM's compiler long before this
+          //     transpiler existed. So iteration is driven by a hidden $-prefixed counter (which
+          //     can't collide with a PlainLang name -- the language disallows '$' in identifiers),
+          //     and the real variable is refreshed from it at the top of every pass.
+          const v = node[1], counter = `$${v}Count`, stopVar = `$${v}Stop`, stepVar = `$${v}Step`;
+          const label = `$L${this.loopCounter++}`;
+          this.loopLabels.push(label);
+          this.emit(
+            `${label}: for (let ${counter} = ${this.expr(node[2])}, ${stopVar} = ${this.expr(node[3])}, ` +
+            `${stepVar} = (${counter} <= ${stopVar} ? 1 : -1); (${counter} - ${stopVar}) * ${stepVar} <= 0; ${counter} += ${stepVar}) {`);
+          this.indent++;
+          this.emit(`${v} = ${counter};`);
+          this.stmtList(node[4]);
+          this.indent--;
+          this.emit("}");
+          this.loopLabels.pop();
+          break;
+        }
+        case "foreach": this.openLoop(`for (const ${node[1]} of ${this.expr(node[2])})`, node[3]); break;
         case "define": {
           this.emit(`function ${node[1]}(${node[2].join(", ")}) {`);
+          const savedLabels = this.loopLabels;
+          this.loopLabels = [];             // a function body has no enclosing loop of its own
           this.indent++; this.declareScope(node[3]); this.stmtList(node[3]); this.indent--;
+          this.loopLabels = savedLabels;
           this.emit("}");
           break;
         }
@@ -1154,8 +1254,8 @@
         case "pen":  this.emit(`turtle.${node[1] === "down" ? "penDown" : "penUp"}();`); break;
         case "pencolor": this.emit(`turtle.color(${this.expr(node[1])});`); break;
         case "wait": this.emit(`// wait`); break;
-        case "break": this.emit(`break;`); break;
-        case "continue": this.emit(`continue;`); break;
+        case "break": this.emit(this.loopLabels.length ? `break ${this.currentLoopLabel()};` : "break;"); break;
+        case "continue": this.emit(this.loopLabels.length ? `continue ${this.currentLoopLabel()};` : "continue;"); break;
         case "if": {
           const [branches, elseBlock] = [node[1], node[2]];
           branches.forEach(([cond, body], idx) => {
@@ -1198,6 +1298,7 @@
       if (op === "filter") return `${this.expr(node[2])}.filter(${this.expr(node[1])})`;
       if (op === "reduce") return `${this.expr(node[2])}.reduce(${this.expr(node[1])}, ${this.expr(node[3])})`;
       if (op === "index") return `itemOf(${this.expr(node[1])}, ${this.expr(node[2])})`;
+      if (op === "binop" && node[1] === "+") return `plus(${this.expr(node[2])}, ${this.expr(node[3])})`;
       if (op === "binop") return `(${this.expr(node[2])} ${node[1]} ${this.expr(node[3])})`;
       if (op === "cmp") {
         const js = { "==": "===", "!=": "!==", ">": ">", "<": "<", ">=": ">=", "<=": "<=" }[node[1]];
@@ -1212,15 +1313,17 @@
         switch (node[1]) {
           case "length":    return `sizeOf(${a[0]})`;
           case "keys":      return `Object.keys(${a[0]})`;
-          case "uppercase": return `String(${a[0]}).toUpperCase()`;
-          case "lowercase": return `String(${a[0]}).toLowerCase()`;
-          case "trim":      return `String(${a[0]}).trim()`;
-          case "split":     return `String(${a[0]}).split(${a[1]})`;
+          // format(), not native String(): a number argument must go through the same
+          // 10-decimal rounding every other engine uses (native String() shows full precision).
+          case "uppercase": return `format(${a[0]}).toUpperCase()`;
+          case "lowercase": return `format(${a[0]}).toLowerCase()`;
+          case "trim":      return `format(${a[0]}).trim()`;
+          case "split":     return `format(${a[0]}).split(${a[1]})`;
           case "join":      return `${a[0]}.map(format).join(${a[1]})`;
-          case "replace":   return `String(${a[2]}).split(${a[0]}).join(${a[1]})`;
-          case "position":  return `(String(${a[1]}).indexOf(${a[0]}) + 1)`;
+          case "replace":   return `format(${a[2]}).split(${a[0]}).join(${a[1]})`;
+          case "position":  return `(format(${a[1]}).indexOf(${a[0]}) + 1)`;
           case "contains":  return `containsOf(${a[0]}, ${a[1]})`;
-          case "round":     return `Math.round(${a[0]})`;
+          case "round":     return `roundHalfAway(${a[0]})`;
           case "absolute":  return `Math.abs(${a[0]})`;
           case "sqrt":      return `Math.sqrt(${a[0]})`;
           case "random":    return `randomBetween(${a[0]}, ${a[1]})`;
@@ -1231,8 +1334,8 @@
           case "first":     return `${a[0]}[0]`;
           case "last":      return `${a[0]}[${a[0]}.length - 1]`;
           case "reverse":   return `[...${a[0]}].reverse()`;
-          case "sorted":    return `[...${a[0]}].sort((x, y) => x - y)`;
-          case "remainder": return `(${a[0]} % ${a[1]})`;
+          case "sorted":    return `sortedOf(${a[0]})`;
+          case "remainder": return `remainderOf(${a[0]}, ${a[1]})`;
           case "floor":     return `Math.floor(${a[0]})`;
           case "ceiling":   return `Math.ceil(${a[0]})`;
           case "power":     return `Math.pow(${a[0]}, ${a[1]})`;
