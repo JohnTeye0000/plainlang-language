@@ -7,6 +7,18 @@ each maps to a phase of [ROADMAP.md](ROADMAP.md).
 > *retroactively* (on 2026‑09‑24) and point at the commits that actually completed each
 > phase — the commit dates below are the real ones. Nothing was back‑dated.
 
+## [Unreleased]
+
+- **Native x86-64 backend for the AetherOS kernel** (`plainaxe.py`): hand-encoded machine code (SSE2
+  doubles, rel32 fixups, a small runtime for floor/trunc/power/error reporting), emitted as AXE1 programs
+  that run in ring 3. Reuses the WebAssembly backend's front end. First command-line engine to execute
+  `wait N`, compiled to the kernel's blocking `sleep` system call.
+- **Static scheduling-hint classifier** (`plainhint.py`): estimates work per wait from loop structure and
+  labels a program `cpu`, `io`, `interactive` or `none`, with a written rationale stored in the output.
+- **`test_axe.py`**: boots the real kernel in QEMU and checks 30 programs + 200 fuzzer programs against the
+  interpreter; also unit-tests the encoder and the classifier (those run in CI; the on-kernel part skips
+  without QEMU). Caught an evaluation-order bug in `say` before it shipped.
+
 ## [0.5.0] — 2026‑09‑24  ·  Product, reach, and a specification
 
 - **The JavaScript engine joined the fuzzing** (`fuzz_js.py`): 8,000 random programs agree with the Python

@@ -46,6 +46,8 @@ run one step at a time.
 | **`plainlsp.py`** | A **Language Server** — live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
 | **`test_lsp.py`** | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
 | **`plainwasm.py`** | A **WebAssembly backend** — compiles PlainLang to a real `.wasm` binary (hand-written encoder: LEB128, sections, opcodes, structured control flow). Runs in any WASM host. |
+| **`plainaxe.py`** | A **native x86-64 backend** for [AetherOS](https://github.com/JohnTeye0000/aetheros), a from-scratch kernel — hand-encoded SSE2 machine code, run in ring 3. Adds `wait N` (a real blocking sleep). |
+| **`plainhint.py`** | A **static behaviour classifier**: reads a program and guesses `cpu` / `io` / `interactive`, with a written rationale, as a scheduling hint for the kernel. |
 | **`wasm_runner.js`** | The small host that supplies a compiled module's imports (print, fail, pow) and runs it under Node. |
 | **`fuzz_wasm.py`** / **`test_wasm.py`** | A differential fuzzer and test suite that run every program through the interpreter *and* real WebAssembly and demand identical output. |
 | **`vscode-extension/`** | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
@@ -423,6 +425,32 @@ It's held to the same standard as every other engine: `fuzz_wasm.py` generates r
 and checks the interpreter and **real WebAssembly** agree on every one — output *and* the point
 where a runtime error stops the program. Known, documented limit: the WASM backend uses doubles,
 and numbers are 64-bit floats in *every* engine, so the same program prints the same digits everywhere.
+
+### Compiling to native x86-64 for AetherOS
+
+`plainaxe.py` compiles PlainLang to **machine code for [AetherOS](https://github.com/JohnTeye0000/aetheros)**,
+a separate from-scratch x86-64 kernel: every instruction is hand-encoded (no assembler), numbers live in
+SSE2 registers as IEEE doubles, and the program runs in ring 3 under the kernel's scheduler, talking to it
+through system calls (`write`, `sleep`, `exit`, and a `printnum` call that formats numbers exactly like
+`format_number`). It shares the WebAssembly backend's front end, so both accept and refuse exactly the same
+programs. It's the first command-line engine to execute **`wait N`** — and on AetherOS that's a genuine
+blocking sleep: the process uses no CPU until it wakes.
+
+```
+$ python plainaxe.py program.plang -o program.axe --explain   # compile + show the scheduling hint
+```
+
+`plainhint.py` reads the same program and guesses how it will behave — `cpu`, `io`, `interactive` — from
+its loop structure and its waits, and writes that guess (with its reasoning) into the `.axe` file, where the
+kernel's hint-aware schedulers can use it. Whether that helps, and when it misleads, is the subject of a
+small scheduling study in the AetherOS repo (`experiments/RESEARCH.md`).
+
+Held to the same standard as the other engines: `test_axe.py` boots the real kernel in QEMU, runs 30
+hand-written programs plus **200 random programs** from the WASM fuzzer's generator, and checks every
+output against the interpreter (including where runtime errors stop). The fuzzer caught a real bug on the
+way: `say "total " plus (remainder of x and 0)` printed `total ` before failing; the interpreter builds the
+whole line first. Documented limits: `power` with a fractional exponent and `remainder` of numbers beyond
+2^53 stop with an error instead of answering; text output is ASCII.
 
 ### Editor tooling
 

@@ -36,6 +36,8 @@ jobs:
         run: python test_lsp.py
       - name: WebAssembly backend (runs real .wasm under Node)
         run: python test_wasm.py
+      - name: AetherOS x86-64 backend + hint classifier (on-kernel part needs QEMU; skipped here)
+        run: python test_axe.py
       - name: Documentation (every example runs, engines agree, every keyword covered)
         run: python test_docs.py
       - name: Accessibility (WCAG AA palette contrast, landmarks, labels, keyboard support)

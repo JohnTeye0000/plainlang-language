@@ -29,6 +29,7 @@ SUITES = [
     ("test_imports", ["python", "test_imports.py"], False),
     ("test_lsp", ["python", "test_lsp.py"], False),
     ("test_wasm", ["python", "test_wasm.py"], True),
+    ("test_axe", ["python", "test_axe.py"], True),
     ("test_docs", ["python", "test_docs.py"], False),
     ("test_a11y", ["python", "test_a11y.py"], False),
     ("test_spec", ["python", "test_spec.py"], True),

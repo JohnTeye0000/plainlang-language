@@ -14,3 +14,6 @@ Thumbs.db
 
 # Generated documentation site (built and deployed by CI)
 site/
+
+# AetherOS backend test scratch (disk images, serial logs)
+.axe_test/
