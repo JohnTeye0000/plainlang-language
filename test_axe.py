@@ -96,8 +96,32 @@ for name, src, want in [("a long counting loop", CPU_PROG, "cpu"),
                         ("a three-line program", "say 1\nsay 2\nsay 3", "none")]:
     hint, why = plainhint.infer(px.parse(src))
     check(f"{name} -> {want}", hint == want, f"got {hint}: {why}")
-hint, why = plainhint.infer(px.parse("set n to 5\nrepeat n times\nwait 1\nend"))
-check("a non-constant loop count is flagged in the rationale", "isn't a constant" in why, why)
+hint, why = plainhint.infer(px.parse(
+    "define g with a\nreturn a\nend\nset n to g with 5\nrepeat n times\nwait 1\nend"))
+check("a loop count computed by a function call is flagged in the rationale", "isn't a constant" in why, why)
+
+print("Counted-loop analysis")
+COUNTED = "set x to 0\nwhile x is less than 10000\nset x to x plus 1\nend\nwait 0.001"
+_, why = plainhint.infer(px.parse(COUNTED))
+check("a counted while loop gets its exact trip count", "10,000 iterations" in why, why)
+_, why = plainhint.infer(px.parse(COUNTED), "basic")
+check("the basic analysis still just guesses", "assumed 100" in why, why)
+for name, body, reason in [
+    ("a `skip` that can jump past the increment",
+     "set x to 0\nwhile x is less than 50\nif x is equal to 3 then\nskip\nend\nset x to x plus 1\nend", "skip"),
+    ("a counter that moves away from its bound",
+     "set x to 0\nwhile x is less than 50\nset x to x minus 1\nend", "away"),
+    ("a bound that changes inside the loop",
+     "set n to 50\nset x to 0\nwhile x is less than n\nset n to n plus 1\nset x to x plus 1\nend", "bound changes"),
+    ("a counter written twice",
+     "set x to 0\nwhile x is less than 50\nset x to x plus 1\nset x to x plus 1\nend", "exactly once"),
+    ("an unknown starting value",
+     "define g with a\nreturn a\nend\nset x to g with 0\nwhile x is less than 50\nset x to x plus 1\nend", "starting value"),
+]:
+    _, why = plainhint.infer(px.parse(body))
+    check(f"refuses to guess: {name}", "assumed 100" in why and reason in why, why)
+_, why = plainhint.infer(px.parse("set x to 10\nwhile x is greater than 0\nset x to x minus 2\nend"))
+check("a counting-down loop is recognised (5 iterations)", "5 iterations" in why, why)
 
 # ─── differential: interpreter vs. the real kernel ──────────────────────────
 
