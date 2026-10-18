@@ -1,0 +1,9 @@
+définir double avec n
+    retourner n multiplié par 2
+fin
+
+mettre total à 0
+pour chaque s dans liste de 1, 2, 3
+    mettre total à total plus s
+fin
+dire "Total: {total}, double: {double avec total}"

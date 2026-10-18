@@ -40,6 +40,7 @@ SUITES = [
     ("test_lessons", ["node", "test_lessons.js"], False),
     ("test_pilot", ["node", "test_pilot.js"], False),
     ("test_pilot_report", ["python", "test_pilot_report.py"], False),
+    ("test_locale", ["python", "test_locale.py"], False),
 ]
 
 

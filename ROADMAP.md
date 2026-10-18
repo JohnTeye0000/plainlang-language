@@ -74,7 +74,7 @@ Make it real for learners:
 - [x] Expand the Workbook into a full **interactive course** — 29 lessons in 6 units (first steps, decisions, loops, collections, functions, drawing); every lesson ships a reference solution that `test_lessons.js` proves passes its own checker while the starter does not
 - [ ] Save/share projects; a small gallery of learner creations
 - [x] Accessibility pass — an axe-core audit of the playground (5 rule failures) and docs found and drove fixes: WCAG AA contrast on every palette colour, labelled controls, landmarks and a skip link, real tab semantics with arrow-key support, a modal Workbook with focus trap/Escape/focus return, live regions for output, keyboard-reachable scroll regions, no editor keyboard trap, `prefers-reduced-motion`. Zero violations across 8 UI states; `test_a11y.py` locks it in.
-- [ ] Optional "teach in your language" (localized keywords)
+- [ ] Optional "teach in your language" (localized keywords) — *mechanism built and tested (`plainlocale.py`, `plain run --lang`, a validator, a blank template, a contributor guide, a demonstration French locale). Still needs real locales written by native speakers (Twi, Ga, Ewe, …), plus the playground and error messages.*
 - [ ] Release **v1.0**
 
 ## Phase 5 — Impact & evidence  *(ongoing)*

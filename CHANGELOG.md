@@ -9,6 +9,12 @@ each maps to a phase of [ROADMAP.md](ROADMAP.md).
 
 ## [Unreleased]
 
+- **Write PlainLang in your own language** (`plainlocale.py`). A locale file maps each of the 98 keywords
+  to a word in another language; programs are translated *before* tokenizing, so every engine, the checker
+  and the formatter work in any language unchanged. `plain run --lang fr`, `plain translate`, and
+  `plain locale check|template`. Comments, quoted text and names are never touched; `{code}` in a text is.
+  English -> French -> English is the identity on hundreds of generated programs. Ships a demonstration
+  French locale and a contributor guide, and deliberately no guessed Twi/Ga/Ewe: those need native speakers.
 - **Pilot mode** for classroom trials: open the playground with `?pilot=1` and it records which lessons
   are tried, whether each check passed, and the *category* of each error, never the program text, names,
   or error wording (which can quote a learner's variable names). `plain pilot` turns exported files into a

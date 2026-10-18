@@ -71,6 +71,7 @@ purpose: it's the price of four engines that agree.)
 - [ ] **Grammar** — `grammar.ebnf`; then `python spec_fuzz.py 3000` must report 0 disagreements
 - [ ] **Specification** — a rule + executable example in `spec_content.py`, then `python build_spec.py`
 - [ ] **Documentation** — an example in `docs_content.py` (`test_docs.py` requires every keyword to be documented)
+- [ ] **Locales** — translate the new keyword in `locales/demo-fr.json` (`test_locale.py` fails until you do) and tell native-speaker locale authors
 - [ ] **Editors** — the keyword lists in `vscode-extension/syntaxes/plainlang.tmLanguage.json` and `plainlsp.py`'s hover docs
 - [ ] **Tests** — `test_plainlang.py`, `test_vm.py` (cross‑validation), `test_js.js`, and `test_wasm.py` if applicable
 - [ ] **Fuzzers** — teach `fuzz.py` (and `fuzz_wasm.py`) to generate it
