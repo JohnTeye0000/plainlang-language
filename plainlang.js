@@ -1046,12 +1046,34 @@
     return a === b;
   }
 
+  // Names a PlainLang program may legally use but JavaScript (or the generated program's own
+  // helpers) cannot: 'class', 'new', 'default', 'format', 'Math', ... A student's
+  // `set class to "JHS 2"` used to become a JavaScript SyntaxError. Such names are emitted with a
+  // '$' in front; PlainLang identifiers can never contain '$', so a rename can't collide.
+  const JS_RESERVED = new Set([
+    "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do",
+    "else", "enum", "export", "extends", "false", "finally", "for", "function", "if", "import", "in",
+    "instanceof", "new", "null", "return", "super", "switch", "this", "throw", "true", "try", "typeof",
+    "var", "void", "while", "with", "yield", "let", "static", "implements", "interface", "package",
+    "private", "protected", "public", "await", "async", "arguments", "eval", "undefined", "NaN",
+    "Infinity", "globalThis", "window", "Math", "console", "Number", "String", "Array", "Object",
+    "BigInt", "JSON", "Boolean", "Error", "Symbol", "Date", "RegExp", "Map", "Set", "prompt",
+    // the generated program's own helpers
+    "say", "format", "plus", "remainderOf", "sortedOf", "roundHalfAway", "itemOf", "setItemOf",
+    "sizeOf", "containsOf", "randomBetween", "ask", "turtle",
+  ]);
+
   // ─── Compiler: PlainLang → JavaScript ──────────────────────────────────────
   // Walks the same AST the interpreter uses and emits readable, idiomatic
   // JavaScript. The point is pedagogical: a beginner sees their English program
   // become the real code a professional would write.
   class Compiler {
-    constructor() { this.lines = []; this.indent = 0; this.loopLabels = []; this.loopCounter = 0; }
+    constructor() { this.lines = []; this.indent = 0; this.loopLabels = []; this.loopCounter = 0; this.renamed = new Set(); }
+    id(name) {
+      if (!JS_RESERVED.has(name)) return name;
+      this.renamed.add(name);
+      return "$" + name;
+    }
     pad() { return "  ".repeat(this.indent); }
     emit(s) { this.lines.push(this.pad() + s); }
     unwrap(n) { return n[0] === "@" ? n[2] : n; }
@@ -1143,6 +1165,8 @@
         "const containsOf = (c, p) => Array.isArray(c) ? c.includes(p) : String(c).includes(String(p));");
       if (/\bturtle\./.test(body)) parts.push(
         "// 'turtle' would be your drawing library (move the pen across a canvas).");
+      if (this.renamed.size) parts.splice(1, 0,
+        `// ${[...this.renamed].sort().join(", ")} ${this.renamed.size === 1 ? "is a reserved word or name" : "are reserved words or names"} in JavaScript, so ${this.renamed.size === 1 ? "it appears" : "they appear"} here with a $ in front.`);
       return parts.join("\n") + "\n\n";
     }
 
@@ -1163,7 +1187,7 @@
         }
       };
       walk(block[1]);
-      if (names.size) this.emit("let " + [...names].join(", ") + ";");
+      if (names.size) this.emit("let " + [...names].map((n) => this.id(n)).join(", ") + ";");
     }
 
     stmtList(block) { for (const s of block[1]) this.stmt(s); }
@@ -1194,9 +1218,9 @@
       node = this.unwrap(node);
       const op = node[0];
       switch (op) {
-        case "set":  this.emit(`${node[1]} = ${this.expr(node[2])};`); break;
+        case "set":  this.emit(`${this.id(node[1])} = ${this.expr(node[2])};`); break;
         case "say":  this.emit(`say(${this.expr(node[1])});`); break;
-        case "ask":  this.emit(`${node[2]} = ask(${this.expr(node[1])});`); break;
+        case "ask":  this.emit(`${this.id(node[2])} = ask(${this.expr(node[1])});`); break;
         case "return": this.emit(`return ${this.expr(node[1])};`); break;
         case "repeat": {
           // A hardcoded literal 'i' here can collide with a REAL PlainLang variable also
@@ -1228,16 +1252,16 @@
             `${label}: for (let ${counter} = ${this.expr(node[2])}, ${stopVar} = ${this.expr(node[3])}, ` +
             `${stepVar} = (${counter} <= ${stopVar} ? 1 : -1); (${counter} - ${stopVar}) * ${stepVar} <= 0; ${counter} += ${stepVar}) {`);
           this.indent++;
-          this.emit(`${v} = ${counter};`);
+          this.emit(`${this.id(v)} = ${counter};`);
           this.stmtList(node[4]);
           this.indent--;
           this.emit("}");
           this.loopLabels.pop();
           break;
         }
-        case "foreach": this.openLoop(`for (const ${node[1]} of ${this.expr(node[2])})`, node[3]); break;
+        case "foreach": this.openLoop(`for (const ${this.id(node[1])} of ${this.expr(node[2])})`, node[3]); break;
         case "define": {
-          this.emit(`function ${node[1]}(${node[2].join(", ")}) {`);
+          this.emit(`function ${this.id(node[1])}(${node[2].map((p) => this.id(p)).join(", ")}) {`);
           const savedLabels = this.loopLabels;
           this.loopLabels = [];             // a function body has no enclosing loop of its own
           this.indent++; this.declareScope(node[3]); this.stmtList(node[3]); this.indent--;
@@ -1245,9 +1269,9 @@
           this.emit("}");
           break;
         }
-        case "call": this.emit(`${node[1]}(${node[2].map((a) => this.expr(a)).join(", ")});`); break;
-        case "add":  this.emit(`${node[2]}.push(${this.expr(node[1])});`); break;
-        case "remove": this.emit(`${node[2]}.splice(${this.expr(node[1])} - 1, 1);`); break;
+        case "call": this.emit(`${this.id(node[1])}(${node[2].map((a) => this.expr(a)).join(", ")});`); break;
+        case "add":  this.emit(`${this.id(node[2])}.push(${this.expr(node[1])});`); break;
+        case "remove": this.emit(`${this.id(node[2])}.splice(${this.expr(node[1])} - 1, 1);`); break;
         case "setindex": this.emit(`setItemOf(${this.expr(node[1])}, ${this.expr(node[2])}, ${this.expr(node[3])});`); break;
         case "move": this.emit(`turtle.${node[1] === "forward" ? "forward" : "back"}(${this.expr(node[2])});`); break;
         case "turn": this.emit(`turtle.${node[1]}(${this.expr(node[2])});`); break;
@@ -1290,7 +1314,7 @@
       if (op === "num") return String(node[1]);
       if (op === "str") return JSON.stringify(node[1]);
       if (op === "bool") return String(node[1]);
-      if (op === "var") return node[1];
+      if (op === "var") return this.id(node[1]);
       if (op === "neg") return `(-${this.expr(node[1])})`;
       if (op === "list") return "[" + node[1].map((e) => this.expr(e)).join(", ") + "]";
       if (op === "record") return "{ " + node[1].map(([k, v]) => `[${this.expr(k)}]: ${this.expr(v)}`).join(", ") + " }";
@@ -1307,7 +1331,7 @@
       if (op === "and") return `(${this.expr(node[1])} && ${this.expr(node[2])})`;
       if (op === "or")  return `(${this.expr(node[1])} || ${this.expr(node[2])})`;
       if (op === "not") return `(!${this.expr(node[1])})`;
-      if (op === "call") return `${node[1]}(${node[2].map((a) => this.expr(a)).join(", ")})`;
+      if (op === "call") return `${this.id(node[1])}(${node[2].map((a) => this.expr(a)).join(", ")})`;
       if (op === "builtin") {
         const a = node[2].map((x) => this.expr(x));
         switch (node[1]) {

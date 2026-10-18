@@ -269,6 +269,29 @@ test("sorted compares text lexicographically, not with a numeric subtraction com
 test("round is half away from zero, not native Math.round (which rounds -0.5 to 0)", () => {
   assert.ok(agreesJS("say round of (minus 0.5)"));
 });
+test("names that are JavaScript reserved words or helper names still transpile to working JS", () => {
+  // `set class to "JHS 2"` is natural in a school, and used to become a SyntaxError in the As-JS view.
+  for (const name of ["class", "new", "default", "delete", "function", "var", "let", "typeof", "null", "this",
+                      "enum", "static", "undefined", "NaN", "Infinity", "format", "itemOf", "turtle", "prompt",
+                      "Math", "console", "Number", "JSON"]) {
+    for (const shape of [
+      "set NAME to 5\nsay NAME plus 1",
+      "define NAME with NAME\nreturn NAME plus 1\nend\nsay NAME with 4",
+      "count NAME from 1 to 3\nsay NAME\nend",
+      "for each NAME in list of 1, 2\nsay NAME\nend",
+      "set NAME to list of 1\nadd 2 to NAME\nsay NAME",
+    ]) {
+      const src = shape.split("NAME").join(name);
+      assert.ok(agreesJS(src), `${name}: ${shape.split("\n")[0]}`);
+    }
+  }
+});
+test("a renamed name is explained to the reader, and ordinary names are left alone", () => {
+  const js = PL.compile('set class to "JHS 2"\nsay class');
+  assert.ok(js.includes("$class") && /class is a reserved word/.test(js), js);
+  const plain = PL.compile("set total to 1\nsay total");
+  assert.ok(!plain.includes("$total") && !/reserved word/.test(plain));
+});
 test("transpiled format() never uses scientific notation, for huge or tiny numbers", () => {
   assert.ok(agreesJS("say power of 20 and 18"));
   assert.ok(agreesJS("say 1 divided by 2430000"));

@@ -33,6 +33,7 @@ rather than silently wrong):
 
 Usage:
     python plainaxe.py program.plang -o program.axe [--hint auto|cpu|io|interactive|none]
+                                                    [--analysis counted|basic]
     python plainaxe.py program.plang --explain      # show the inferred hint and why
 """
 
@@ -743,8 +744,10 @@ def main(argv):
         print(pl.format_error(source, e))
         return 1
     hint_arg = argv[argv.index("--hint") + 1] if "--hint" in argv else "auto"
+    analysis = argv[argv.index("--analysis") + 1] if "--analysis" in argv else "counted"
     if hint_arg == "auto":
-        hint, why = plainhint.infer(tree)
+        hint, why = plainhint.infer(tree, analysis)
+        why = f"analysis: {analysis}\n" + why
     else:
         hint, why = hint_arg, "hint given on the command line"
     if "--explain" in argv:

@@ -39,6 +39,8 @@ import sys
 
 import fuzz
 import fuzz_wasm
+import plainlang as pl
+import plainlocale
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _RUNNER = '''
@@ -59,6 +61,35 @@ process.stdout.write(JSON.stringify(srcs.map(src => {
 '''
 
 
+# Names a PlainLang program may use but JavaScript (or the generated code's helpers) can't.
+HOSTILE_NAMES = [
+    "class", "new", "default", "delete", "function", "var", "let", "typeof", "null", "this", "enum", "static",
+    "undefined", "NaN", "Infinity", "format", "itemOf", "turtle", "prompt", "Math", "console", "Number", "JSON",
+    "export", "extends", "super", "switch", "case", "try", "catch", "throw", "void", "yield", "await", "async",
+    "eval", "arguments", "interface", "package", "private", "protected", "public", "implements", "instanceof",
+    "do", "else", "debugger", "break", "continue", "const", "finally", "sortedOf", "remainderOf",
+    "roundHalfAway", "sizeOf", "containsOf", "randomBetween", "setItemOf", "Object", "Array", "String",
+]
+HOSTILE_NAMES = [n for n in HOSTILE_NAMES if n not in pl.KEYWORDS]
+
+
+def hostile_rename(source, rng):
+    """Rename the program's own variables and functions to names JavaScript would choke on, leaving
+    keywords, text and comments alone. The meaning is unchanged, so output must be too."""
+    found = []
+
+    def collect(word):
+        if word.lower() not in pl.KEYWORDS and word not in found:
+            found.append(word)
+        return word
+
+    plainlocale._map_words(source, collect)
+    pool = HOSTILE_NAMES[:]
+    rng.shuffle(pool)
+    mapping = dict(zip(found, pool))
+    return plainlocale._map_words(source, lambda w: mapping.get(w, w))
+
+
 def _batch(sources, timeout=180):
     proc = subprocess.run(["node", "-e", _RUNNER], input=json.dumps(sources).encode(),
                           capture_output=True, cwd=HERE, timeout=timeout)
@@ -75,7 +106,10 @@ def fuzz_transpiler(n, seed=0, batch=300):
         sources = []
         for i in range(min(batch, n - start)):
             gen = fuzz.Generator if (start + i) % 2 == 0 else fuzz_wasm.Generator
-            sources.append(gen(random.Random(k0 + i)).program())
+            program = gen(random.Random(k0 + i)).program()
+            if (start + i) % 3 == 2:      # a third of the programs use names JavaScript reserves
+                program = hostile_rename(program, random.Random(k0 + i))
+            sources.append(program)
         results = _batch(sources)
         for src, r in zip(sources, results):
             if not r["ok"]:
