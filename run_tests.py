@@ -38,6 +38,8 @@ SUITES = [
     ("build_spec --check", ["python", "build_spec.py", "--check"], False),
     ("test_js", ["node", "test_js.js"], False),
     ("test_lessons", ["node", "test_lessons.js"], False),
+    ("test_pilot", ["node", "test_pilot.js"], False),
+    ("test_pilot_report", ["python", "test_pilot_report.py"], False),
 ]
 
 

@@ -156,7 +156,7 @@ def build(out_dir):
 """
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as f:
         f.write(page)
-    for name in ("playground.html", "plainlang.js", "lessons.js"):
+    for name in ("playground.html", "plainlang.js", "lessons.js", "pilot.js"):
         shutil.copy(os.path.join(HERE, name), os.path.join(out_dir, name))
     open(os.path.join(out_dir, ".nojekyll"), "w").close()
     return problems

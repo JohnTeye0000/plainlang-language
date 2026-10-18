@@ -173,6 +173,16 @@
   .tab:focus-visible, button:focus-visible, select:focus-visible, .wb-item:focus-visible, .inspector:focus-visible {
     outline: 2px solid var(--red); outline-offset: 2px;
   }
+  .pilotbar { display: none; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 32px;
+    background: var(--ink); color: var(--paper); font-size: 13px; }
+  .pilotbar.on { display: flex; }
+  .pilotbar label { display: flex; align-items: center; gap: 6px; }
+  .pilotbar input { width: 7em; font: inherit; padding: 3px 6px; border: 1px solid var(--rule-2);
+    background: var(--paper); color: var(--ink); border-radius: 2px; }
+  .pilotbar button { font: inherit; padding: 3px 10px; cursor: pointer; border-radius: 2px;
+    border: 1px solid var(--paper); background: transparent; color: var(--paper); }
+  .pilotbar button:hover { background: var(--paper); color: var(--ink); }
+  .pilotbar .spacer { flex: 1; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .skip-link { position: absolute; left: 8px; top: -60px; background: var(--ink); color: var(--paper);
     padding: 8px 14px; z-index: 100; border-radius: 3px; text-decoration: none; font-size: 14px; }
@@ -317,6 +327,18 @@
   </header>
   <hr class="double-rule" /><div class="sub"></div>
 
+  <!-- Pilot mode bar (only shown with ?pilot=1) -->
+  <div class="pilotbar" id="pilotbar" role="region" aria-label="Pilot mode">
+    <strong>Pilot mode</strong>
+    <label>Participant code <input id="pilotCode" maxlength="12" autocomplete="off" placeholder="P01" aria-label="Participant code"
+      aria-describedby="pilotNote"></label>
+    <button type="button" id="pilotExport">Export data</button>
+    <button type="button" id="pilotClear">Clear data</button>
+    <span class="spacer"></span>
+    <span id="pilotNote">Records which lessons are tried and what <em>kinds</em> of errors happen — never the code or a name. Stays in this browser.</span>
+    <span id="pilotCount" role="status" aria-live="polite"></span>
+  </div>
+
   <!-- Workbook lesson bar -->
   <div class="lessonbar" id="lessonbar" role="region" aria-label="Workbook lesson">
     <div class="lb-top">
@@ -434,6 +456,7 @@
 
 <script src="plainlang.js"></script>
 <script src="lessons.js"></script>
+<script src="pilot.js"></script>
 <script>
 (function () {
   "use strict";
@@ -538,6 +561,7 @@
     lastVars = {};
     renderAt(cursor);
     showTab((result.turtle || []).length > 0 ? "drawing" : "console");
+    if (pilot) { pilot.run(result, codeEl.value.length, currentLesson >= 0 ? currentLesson + 1 : null); updatePilotCount(); }
   }
 
   function escapeText(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
@@ -951,6 +975,11 @@ say "dice roll: " plus random between 1 and 6`,
   // lesson's reference solution passes its own check).
   const LESSONS = window.PLAINLANG_LESSONS;
 
+  // Pilot mode: off unless the facilitator opens the page with ?pilot=1 (see pilot.js).
+  const pilot = (/[?&]pilot=1(&|$)/.test(location.search) && window.PlainLangPilot)
+    ? PlainLangPilot.create({ storage: (() => { try { return window.localStorage; } catch (e) { return null; } })() })
+    : null;
+
   const PROGRESS_KEY = "plainlang.progress.v2";
   function loadProgress() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY)) || {}; } catch (e) { return {}; } }
   function saveProgress(p) { try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch (e) {} }
@@ -1006,6 +1035,7 @@ say "dice roll: " plus random between 1 and 6`,
 
   function startLesson(i) {
     currentLesson = i;
+    if (pilot) { pilot.lessonStart(i + 1); updatePilotCount(); }
     const l = LESSONS[i];
     $("lessonbar").classList.add("on");
     $("lbKicker").textContent = `Workbook · Lesson ${i + 1} of ${LESSONS.length}`;
@@ -1023,6 +1053,7 @@ say "dice roll: " plus random between 1 and 6`,
     if (currentLesson < 0) return;
     run();
     const hint = LESSONS[currentLesson].check(result, codeEl.value);
+    if (pilot) { pilot.check(currentLesson + 1, hint === ""); updatePilotCount(); }
     if (hint === "") {
       progress[currentLesson] = true; saveProgress(progress);
       $("lbProgress").textContent = `${doneCount()} of ${LESSONS.length} complete`;
@@ -1036,6 +1067,28 @@ say "dice roll: " plus random between 1 and 6`,
   $("lbNext").onclick = () => startLesson(Math.min(currentLesson + 1, LESSONS.length - 1));
   $("lbPrev").onclick = () => startLesson(Math.max(currentLesson - 1, 0));
   $("lbExit").onclick = () => { $("lessonbar").classList.remove("on"); currentLesson = -1; };
+
+  // ── Pilot mode bar ───────────────────────────────────────────────────────
+  function updatePilotCount() { if (pilot) $("pilotCount").textContent = pilot.count() + " events recorded"; }
+  if (pilot) {
+    $("pilotbar").classList.add("on");
+    $("pilotCode").value = pilot.participant;
+    $("pilotCode").addEventListener("change", () => { $("pilotCode").value = pilot.setParticipant($("pilotCode").value); });
+    $("pilotExport").onclick = () => {
+      const blob = new Blob([pilot.exportText()], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "plainlang-pilot-" + (pilot.participant || "anonymous") + ".json";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast("Exported " + pilot.count() + " events");
+    };
+    $("pilotClear").onclick = () => {
+      if (confirm("Delete all recorded pilot data from this browser?")) { pilot.clear(); updatePilotCount(); toast("Pilot data cleared"); }
+    };
+    pilot.sessionStart();
+    updatePilotCount();
+  }
 
   // ── Boot ─────────────────────────────────────────────────────────────────
   let loaded = false;

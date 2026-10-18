@@ -10,6 +10,7 @@ plain -- one command for everything PlainLang can do.
     plain spec program.plang       does the grammar accept this file?
     plain lsp                      start the language server on stdio (for editors)
     plain docs                     build the documentation site into ./site
+    plain pilot exports/           turn exported pilot data into a findings report
     plain version
 
 Each subcommand is the tool of the same name, run exactly as if you had typed
@@ -34,6 +35,7 @@ COMMANDS = {
     "spec": "plainspec",
     "lsp": "plainlsp",
     "docs": "build_docs",
+    "pilot": "pilot_report",
 }
 
 

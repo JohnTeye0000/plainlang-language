@@ -9,6 +9,12 @@ each maps to a phase of [ROADMAP.md](ROADMAP.md).
 
 ## [Unreleased]
 
+- **Pilot mode** for classroom trials: open the playground with `?pilot=1` and it records which lessons
+  are tried, whether each check passed, and the *category* of each error, never the program text, names,
+  or error wording (which can quote a learner's variable names). `plain pilot` turns exported files into a
+  findings report (completion and attempts per lesson, time to pass, top error kinds), with an honest
+  small-sample warning. `PILOT.md` is a step-by-step facilitator guide. The accessibility test caught the
+  new participant field missing a label before it shipped.
 - **Native x86-64 backend for the AetherOS kernel** (`plainaxe.py`): hand-encoded machine code (SSE2
   doubles, rel32 fixups, a small runtime for floor/trunc/power/error reporting), emitted as AXE1 programs
   that run in ring 3. Reuses the WebAssembly backend's front end. First command-line engine to execute

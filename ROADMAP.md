@@ -81,8 +81,8 @@ Make it real for learners:
 
 The part that actually differentiates a college application:
 
-- [ ] Teach real beginners (siblings, a club, a library workshop); observe and record
-- [ ] Gather data: completion rates, common errors, what the diagnostics fixed
+- [ ] Teach real beginners (siblings, a club, a library workshop); observe and record — *the guide is written (`PILOT.md`); this needs people, not code*
+- [ ] Gather data: completion rates, common errors, what the diagnostics fixed — *tooling is built and tested: pilot mode (`?pilot=1`) records it privately, `plain pilot` reports it; waiting on a real session*
 - [ ] Write up the findings — a short paper/blog on English-like syntax and the
       time-travel debugger as learning aids
 - [ ] Open-source it well (README, CONTRIBUTING, issues) and invite contributors

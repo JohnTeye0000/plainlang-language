@@ -1,7 +1,7 @@
 # PlainLang
 
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
-&nbsp;·&nbsp; 830 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
+&nbsp;·&nbsp; 999 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
 **A programming language written to be read aloud — and a playground built to teach a first coder.**
 
@@ -61,6 +61,7 @@ run one step at a time.
 | **`plain.py`** | **One command for everything**: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
 | **`run_tests.py`** / **`test_meta.py`** | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |
 | **`CONTRIBUTING.md`** / **`CHANGELOG.md`** | How the four engines fit together and the checklist for adding a feature; the release history. |
+| **`pilot.js`** / **`pilot_report.py`** / **`PILOT.md`** | **Pilot mode** for trying PlainLang with real beginners: open the playground with `?pilot=1` and it records which lessons are tried, pass/fail, and the *kind* of each error — never the code or a name. `plain pilot exports/` turns the exported files into a findings report; `PILOT.md` is a step-by-step guide for a teacher. Tested by `test_pilot.js` and `test_pilot_report.py`. |
 | **`demo.plang`** | A guided tour program that exercises every feature. |
 | **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
