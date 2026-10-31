@@ -33,7 +33,7 @@ rather than silently wrong):
 
 Usage:
     python plainaxe.py program.plang -o program.axe [--hint auto|cpu|io|interactive|none]
-                                                    [--analysis counted|basic]
+                                                    [--analysis counted|basic|safe]
     python plainaxe.py program.plang --explain      # show the inferred hint and why
 """
 

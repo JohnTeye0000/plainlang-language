@@ -21,7 +21,7 @@ written rationale, so a wrong guess can be traced to the rule that made it:
      work per wait <= IO_MAX                  -> io           (bursts of work between waits)
      otherwise                                -> cpu          (waits are rare)
 
-Two analyses (`infer(tree, analysis=...)`, CLI `--analysis`):
+Three analyses (`infer(tree, analysis=...)`, CLI `--analysis`):
 
   basic    every `while` loop is assumed to run UNKNOWN_TRIPS times. This is the
            classifier the first scheduling experiments used, kept so their
@@ -41,6 +41,13 @@ Two analyses (`infer(tree, analysis=...)`, CLI `--analysis`):
            computed by a function stays "unknown" -- that is the classifier's
            deliberate blind spot, and `p_opaque.plang` in the AetherOS repo
            exercises it.
+  safe     counted, but biased to guess HEAVY when unsure: a loop of unknown
+           length is assumed to run UNKNOWN_TRIPS_SAFE times, and an `if`
+           counts the fewest waits of its branches (an `if` without
+           `otherwise` counts none). On 150 generated programs every miss of
+           `counted` was too light, which is the harmful direction for a
+           scheduler that turns hints into priority (AetherOS RESEARCH.md,
+           F17-F18); `safe` trades some accuracy to avoid it.
 
 The thresholds are in "operations", not time. Measured on AetherOS (QEMU,
 -icount shift=3, i.e. 8 ns per instruction): loop-heavy compiled PlainLang runs
@@ -55,6 +62,7 @@ experiments measure what happens when the classifier is wrong.
 import plainlang as pl
 
 UNKNOWN_TRIPS = 100        # assumed iterations for loops whose count isn't a constant
+UNKNOWN_TRIPS_SAFE = 10_000  # the same, for the heavy-biased `safe` analysis
 CPU_MIN = 50_000           # less total work than this: not worth a hint
 INTERACTIVE_MAX = 2_000    # ops per wait
 IO_MAX = 100_000           # ops per wait
@@ -219,9 +227,11 @@ def bound_vars_written(expr, body):
 
 class Estimator:
     def __init__(self, tree, analysis="counted"):
-        if analysis not in ("basic", "counted"):
-            raise ValueError("analysis must be 'basic' or 'counted'")
-        self.counted = analysis == "counted"
+        if analysis not in ("basic", "counted", "safe"):
+            raise ValueError("analysis must be 'basic', 'counted' or 'safe'")
+        self.counted = analysis in ("counted", "safe")
+        self.safe = analysis == "safe"
+        self.unknown = UNKNOWN_TRIPS_SAFE if self.safe else UNKNOWN_TRIPS
         self.funcs = {}
         self.top = []
         for n in _stmts(tree):
@@ -314,9 +324,9 @@ class Estimator:
             return w, 1
         if op == "repeat":
             c = self.cv(n[1])
-            trips = int(c) if c is not None else UNKNOWN_TRIPS
+            trips = int(c) if c is not None else self.unknown
             if c is None:
-                self.note(f"a 'repeat' count isn't a constant; assumed {UNKNOWN_TRIPS} times")
+                self.note(f"a 'repeat' count isn't a constant; assumed {self.unknown} times")
             w, z = self._scoped([n[2]], lambda: self.block(n[2], depth))
             return 1 + trips * (w + 2), trips * z
         if op == "count":
@@ -324,8 +334,8 @@ class Estimator:
             if a is not None and b is not None:
                 trips = int(abs(b - a)) + 1
             else:
-                trips = UNKNOWN_TRIPS
-                self.note(f"a 'count' range isn't constant; assumed {UNKNOWN_TRIPS} steps")
+                trips = self.unknown
+                self.note(f"a 'count' range isn't constant; assumed {self.unknown} steps")
             if self.counted:
                 self.env.pop(n[1], None)
             w, z = self._scoped([n[4]], lambda: self.block(n[4], depth))
@@ -341,24 +351,31 @@ class Estimator:
                     self.note(f"a 'while' loop was recognised as counted: {trips:,} iterations")
                 else:
                     self.note(f"a 'while' loop's length can't be known statically ({why}); "
-                              f"assumed {UNKNOWN_TRIPS} iterations")
+                              f"assumed {self.unknown} iterations")
             else:
-                self.note(f"a 'while' loop's length can't be known statically; assumed {UNKNOWN_TRIPS} iterations")
+                self.note(f"a 'while' loop's length can't be known statically; assumed {self.unknown} iterations")
             if trips is None:
-                trips = UNKNOWN_TRIPS
+                trips = self.unknown
             w, z = self._scoped([n[2]], lambda: self.block(n[2], depth))
             return trips * (w + cw), trips * z
         if op == "if":
-            # take the most expensive branch (an upper bound)
+            # take the most expensive branch (an upper bound); `safe` counts the
+            # FEWEST waits instead, so a gated wait can't make work look light
             best_w = best_z = 0
             work = 0
             bodies = [b for _, b in n[1]] + ([n[2]] if n[2] else [])
+            fewest = None if n[2] else 0
             for c, b in n[1]:
                 cw, _ = self.expr(c, depth)
                 work += cw
             for b in bodies:
                 w, z = self._scoped(bodies, lambda b=b: self.block(b, depth))
                 best_w, best_z = max(best_w, w), max(best_z, z)
+                fewest = z if fewest is None else min(fewest, z)
+            if self.safe:
+                if fewest < best_z:
+                    self.note("an 'if' may skip its wait; counted the fewest waits of its branches")
+                return work + best_w, fewest
             return work + best_w, best_z
         if op == "match":
             vw, _ = self.expr(n[1], depth)

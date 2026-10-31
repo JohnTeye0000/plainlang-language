@@ -123,6 +123,21 @@ for name, body, reason in [
 _, why = plainhint.infer(px.parse("set x to 10\nwhile x is greater than 0\nset x to x minus 2\nend"))
 check("a counting-down loop is recognised (5 iterations)", "5 iterations" in why, why)
 
+print("Safety-biased analysis")
+OPAQUE = ("define g with a\nreturn a\nend\nrepeat 30 times\nset n to g with 5000\nset x to 0\n"
+          "while x is less than n\nset x to x plus 1\nend\nwait 0.004\nend")
+check("counted guesses an opaque loop light", plainhint.infer(px.parse(OPAQUE))[0] == "interactive")
+hint, why = plainhint.infer(px.parse(OPAQUE), "safe")
+check("safe assumes 10,000 iterations and guesses heavier", hint == "io" and "assumed 10000" in why, f"{hint}: {why}")
+GATED = ("count r from 1 to 40\nset s to 0\ncount i from 1 to 2000\nset s to s plus i\nend\n"
+         "if remainder of r and 4 is 0 then\nwait 0.004\nend\nend")
+check("counted counts a gated wait on every round", plainhint.infer(px.parse(GATED))[0] == "io")
+hint, why = plainhint.infer(px.parse(GATED), "safe")
+check("safe counts an `if` without `otherwise` as no wait", hint == "cpu" and "fewest waits" in why, f"{hint}: {why}")
+hint, _ = plainhint.infer(px.parse(GATED.replace("wait 0.004\nend", "wait 0.004\notherwise\nwait 0.001\nend")), "safe")
+check("safe keeps a wait taken on every branch", hint == "io", hint)
+check("known loops are unaffected by safe", plainhint.infer(px.parse(IO_PROG), "safe")[0] == "io")
+
 # ─── differential: interpreter vs. the real kernel ──────────────────────────
 
 try:
