@@ -3,7 +3,7 @@
 [![CI](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml/badge.svg)](https://github.com/JohnTeye0000/plainlang-language/actions/workflows/ci.yml)
 &nbsp;·&nbsp; 1052 checks + differential fuzzing &nbsp;·&nbsp; 4 execution back ends
 
-**A programming language written to be read aloud — and a playground built to teach a first coder.**
+A programming language written to be read aloud, and a playground built to teach a first coder.
 
 ```
 set scores to list of 90, 75, 88, 95, 60
@@ -28,43 +28,43 @@ run one step at a time.
 
 | File | What it is |
 |------|-----------|
-| **`playground.html`** | A self-contained web IDE — editor, live console, turtle-graphics canvas, a variable inspector, a **time-travel debugger**, a built-in **lessons workbook**, and a **"see it as JavaScript"** view. Open it in any browser. |
-| **`plainlang.js`** | The language engine in JavaScript: tokenizer → parser → interpreter, **plus a compiler that translates PlainLang to readable JavaScript**. |
-| **`plainlang.py`** | A second, independent implementation: a tree-walking command-line interpreter and REPL. |
-| **`plainvm.py`** | A **third** backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
-| **`plaincheck.py`** | A static analyzer + **gradual type checker** — a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code, and type errors like text-minus-a-number). |
-| **`test_plainlang.py`** | The reference test suite: language behaviour and error messages, including a regression test for every bug the fuzzers and the spec have found. |
-| **`test_vm.py`** | **Cross-validation**: every program is run through both the tree-walker and the VM and must produce identical output — including the wording of every error. |
-| **`test_diagnostics.py`** | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
-| **`test_check.py`** | Tests for the static analyzer and type checker (including its precision — clean code must not be flagged). |
-| **`test_js.js`** | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
-| **`fuzz.py`** | A **differential fuzzer** — a type-aware generator emits random programs across the whole language and checks the tree-walker and VM agree on every one. |
-| **`test_fuzz.py`** | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
-| **`plainfmt.py`** | A **code formatter** — re-indents a program from its block structure and normalizes whitespace, like gofmt/prettier. `--write` formats in place, `--check` fails CI on unformatted files. |
-| **`test_fmt.py`** | Tests the formatter for the two properties that matter: it never changes what a program does, and formatting an already-formatted program is a no-op. |
-| **`test_imports.py`** | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
-| **`plainlsp.py`** | A **Language Server** — live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
-| **`test_lsp.py`** | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
-| **`plainwasm.py`** | A **WebAssembly backend** — compiles PlainLang to a real `.wasm` binary (hand-written encoder: LEB128, sections, opcodes, structured control flow). Runs in any WASM host. |
-| **`plainaxe.py`** | A **native x86-64 backend** for [AetherOS](https://github.com/JohnTeye0000/aetheros), a from-scratch kernel — hand-encoded SSE2 machine code, run in ring 3. Adds `wait N` (a real blocking sleep). |
-| **`plainhint.py`** | A **static behaviour classifier**: reads a program and guesses `cpu` / `io` / `interactive`, with a written rationale, as a scheduling hint for the kernel. |
-| **`wasm_runner.js`** | The small host that supplies a compiled module's imports (print, fail, pow) and runs it under Node. |
-| **`fuzz_wasm.py`** / **`test_wasm.py`** | A differential fuzzer and test suite that run every program through the interpreter *and* real WebAssembly and demand identical output. |
-| **`vscode-extension/`** | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
-| **`lessons.js`** / **`test_lessons.js`** | The Workbook: a 29-lesson, 6-unit interactive course. Every lesson has a reference solution, and the tests prove each solution passes its own checker and each untouched starter does not. |
-| **`build_docs.py`** / **`docs_content.py`** / **`test_docs.py`** | The documentation site. Every example is *run* when the site is built and its real output printed beneath it; tests check that each example works, that the Python and JS engines agree, and that every keyword is documented. `pages.yml` deploys it with the playground to GitHub Pages. |
-| **`test_a11y.py`** | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
-| **`SPEC.md`** / **`grammar.ebnf`** | The **language specification**, generated from an executable grammar and from examples that are run on every engine. |
-| **`fuzz_js.py`** / **`test_fuzz_js.py`** | A differential fuzzer for the JavaScript engine (the browser's, with its own parser): the same random programs run on it and on the Python interpreter and must agree. |
-| **`fuzz_transpiler.py`** / **`test_fuzz_transpiler.py`** | A differential fuzzer for the PlainLang → JavaScript transpiler: compiles random programs and runs the result, and requires it to match the JS engine's own output. |
-| **`plainspec.py`** / **`spec_fuzz.py`** / **`test_spec.py`** | The grammar as a recognizer, a differential tester that pits it against both hand-written parsers on thousands of corrupted programs, and the test suite that checks every rule of the spec. |
-| **`plain.py`** | **One command for everything**: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
-| **`run_tests.py`** / **`test_meta.py`** | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |
-| **`CONTRIBUTING.md`** / **`CHANGELOG.md`** | How the four engines fit together and the checklist for adding a feature; the release history. |
-| **`pilot.js`** / **`pilot_report.py`** / **`PILOT.md`** | **Pilot mode** for trying PlainLang with real beginners: open the playground with `?pilot=1` and it records which lessons are tried, pass/fail, and the *kind* of each error — never the code or a name. `plain pilot exports/` turns the exported files into a findings report; `PILOT.md` is a step-by-step guide for a teacher. Tested by `test_pilot.js` and `test_pilot_report.py`. |
-| **`plainlocale.py`** / **`locales/`** / **`test_locale.py`** | **Write PlainLang in your own language.** A locale file maps each keyword to a word in another language; `plain run --lang fr program.plang` runs a program written in it, on any engine. Ships a demonstration French locale, a blank template, a validator, and a guide for native speakers to contribute real ones — deliberately *not* guessing Twi, Ga or Ewe keywords. |
-| **`demo.plang`** | A guided tour program that exercises every feature. |
-| **`examples/shapes/`** | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
+| `playground.html` | A self-contained web IDE, editor, live console, turtle-graphics canvas, a variable inspector, a time-travel debugger, a built-in lessons workbook, and a "see it as JavaScript" view. Open it in any browser. |
+| `plainlang.js` | The language engine in JavaScript: tokenizer → parser → interpreter, plus a compiler that translates PlainLang to readable JavaScript. |
+| `plainlang.py` | A second, independent implementation: a tree-walking command-line interpreter and REPL. |
+| `plainvm.py` | A third backend: a bytecode *compiler* and a stack-based *virtual machine*, with a disassembler. ~1.9× faster than the tree-walker. |
+| `plaincheck.py` | A static analyzer + gradual type checker, a semantic pass that finds bugs *before* the program runs and reports many at once (undefined/unused variables, unknown functions, wrong arity, unreachable code, and type errors like text-minus-a-number). |
+| `test_plainlang.py` | The reference test suite: language behaviour and error messages, including a regression test for every bug the fuzzers and the spec have found. |
+| `test_vm.py` | Cross-validation: every program is run through both the tree-walker and the VM and must produce identical output, including the wording of every error. |
+| `test_diagnostics.py` | A 14-case suite for the diagnostics: caret underlines and "did you mean?" suggestions. |
+| `test_check.py` | Tests for the static analyzer and type checker (including its precision, clean code must not be flagged). |
+| `test_js.js` | A Node suite for the JavaScript engine, transpiler, and diagnostics. |
+| `fuzz.py` | A differential fuzzer, a type-aware generator emits random programs across the whole language and checks the tree-walker and VM agree on every one. |
+| `test_fuzz.py` | A seeded, reproducible fuzzing run (1,200 random programs) wired into CI. |
+| `plainfmt.py` | A code formatter, re-indents a program from its block structure and normalizes whitespace, like gofmt/prettier. `--write` formats in place, `--check` fails CI on unformatted files. |
+| `test_fmt.py` | Tests the formatter for the two properties that matter: it never changes what a program does, and formatting an already-formatted program is a no-op. |
+| `test_imports.py` | Tests multi-file programs (`import`): transitive and diamond imports, circular-import and non-library-file rejection, cross-validated between the tree-walker and the VM. |
+| `plainlsp.py` | A Language Server, live diagnostics (reusing `plaincheck.py`) and hover, spoken over real LSP stdio framing so any LSP-capable editor can connect. |
+| `test_lsp.py` | Tests the LSP message protocol directly (no editor needed) plus one real subprocess test that speaks actual stdio framing to the server. |
+| `plainwasm.py` | A WebAssembly backend, compiles PlainLang to a real `.wasm` binary (hand-written encoder: LEB128, sections, opcodes, structured control flow). Runs in any WASM host. |
+| `plainaxe.py` | A native x86-64 backend for [AetherOS](https://github.com/JohnTeye0000/aetheros), a from-scratch kernel, hand-encoded SSE2 machine code, run in ring 3. Adds `wait N` (a real blocking sleep). |
+| `plainhint.py` | A static behaviour classifier: reads a program and guesses `cpu` / `io` / `interactive`, with a written rationale, as a scheduling hint for the kernel. |
+| `wasm_runner.js` | The small host that supplies a compiled module's imports (print, fail, pow) and runs it under Node. |
+| `fuzz_wasm.py` / `test_wasm.py` | A differential fuzzer and test suite that run every program through the interpreter *and* real WebAssembly and demand identical output. |
+| `vscode-extension/` | A VS Code extension: syntax highlighting + `plainlsp.py` wired in as the language server. |
+| `lessons.js` / `test_lessons.js` | The Workbook: a 29-lesson, 6-unit interactive course. Every lesson has a reference solution, and the tests prove each solution passes its own checker and each untouched starter does not. |
+| `build_docs.py` / `docs_content.py` / `test_docs.py` | The documentation site. Every example is *run* when the site is built and its real output printed beneath it; tests check that each example works, that the Python and JS engines agree, and that every keyword is documented. `pages.yml` deploys it with the playground to GitHub Pages. |
+| `test_a11y.py` | Accessibility regression tests: WCAG AA contrast for every palette colour (light and dark), plus the playground's landmarks, labels, tab/dialog semantics and keyboard support. The original fixes came from a real axe-core audit. |
+| `SPEC.md` / `grammar.ebnf` | The language specification, generated from an executable grammar and from examples that are run on every engine. |
+| `fuzz_js.py` / `test_fuzz_js.py` | A differential fuzzer for the JavaScript engine (the browser's, with its own parser): the same random programs run on it and on the Python interpreter and must agree. |
+| `fuzz_transpiler.py` / `test_fuzz_transpiler.py` | A differential fuzzer for the PlainLang → JavaScript transpiler: compiles random programs and runs the result, and requires it to match the JS engine's own output. |
+| `plainspec.py` / `spec_fuzz.py` / `test_spec.py` | The grammar as a recognizer, a differential tester that pits it against both hand-written parsers on thousands of corrupted programs, and the test suite that checks every rule of the spec. |
+| `plain.py` | One command for everything: `plain run`, `repl`, `check`, `fmt`, `vm`, `wasm`, `spec`, `lsp`, `docs`. Each runs the tool of the same name, so it can't drift. |
+| `run_tests.py` / `test_meta.py` | Runs every suite CI runs (`--quick` skips the slow randomized ones); the meta-test fails if a suite isn't wired into both CI and the runner. |
+| `CONTRIBUTING.md` / `CHANGELOG.md` | How the four engines fit together and the checklist for adding a feature; the release history. |
+| `pilot.js` / `pilot_report.py` / `PILOT.md` | Pilot mode for trying PlainLang with real beginners: open the playground with `?pilot=1` and it records which lessons are tried, pass/fail, and the *kind* of each error, never the code or a name. `plain pilot exports/` turns the exported files into a findings report; `PILOT.md` is a step-by-step guide for a teacher. Tested by `test_pilot.js` and `test_pilot_report.py`. |
+| `plainlocale.py` / `locales/` / `test_locale.py` | Write PlainLang in your own language. A locale file maps each keyword to a word in another language; `plain run --lang fr program.plang` runs a program written in it, on any engine. Ships a demonstration French locale, a blank template, a validator, and a guide for native speakers to contribute real ones, deliberately *not* guessing Twi, Ga or Ewe keywords. |
+| `demo.plang` | A guided tour program that exercises every feature. |
+| `examples/shapes/` | A small multi-file program (`main.plang` imports `geometry.plang`) showing `import` in practice. |
 
 ---
 
@@ -72,7 +72,7 @@ run one step at a time.
 
 ### 1. Error messages that teach
 A beginner language lives or dies by what happens when you get it *wrong*. Errors point
-to the exact source text with a caret, and an edit-distance check offers a way forward —
+to the exact source text with a caret, and an edit-distance check offers a way forward,
 Rust/Elm-grade diagnostics, aimed at someone on their first day:
 
 ```
@@ -90,13 +90,13 @@ build these through shared helpers, so the message is identical everywhere.
 
 ### 2. A time-travel debugger
 Running a program records a snapshot before every step. You can then scrub a slider to
-move forward *and backward* through execution — watching each variable change and the
+move forward *and backward* through execution, watching each variable change and the
 turtle's drawing build up, with the current line highlighted. Abstract control flow
 becomes something you can see.
 
 ### 3. It compiles to real JavaScript
-PlainLang isn't just interpreted — the same syntax tree is walked by a compiler that emits
-clean, idiomatic JavaScript. A learner flips to the **As JS** tab and sees their English
+PlainLang isn't just interpreted, the same syntax tree is walked by a compiler that emits
+clean, idiomatic JavaScript. A learner flips to the As JS tab and sees their English
 turn into the code a professional would write:
 
 ```
@@ -209,7 +209,7 @@ end
 
 ## Running it
 
-**The playground** (recommended):
+The playground (recommended):
 ```bash
 # from this folder
 python -m http.server 8753
@@ -217,7 +217,7 @@ python -m http.server 8753
 ```
 Or just open `playground.html` directly in a browser.
 
-**The command line:**
+The command line:
 ```bash
 python plain.py run demo.plang     # run a program
 python plain.py repl               # interactive prompt
@@ -228,7 +228,7 @@ python plain.py help               # everything else
 ```
 Each command is the tool of the same name (`plainlang.py`, `plaincheck.py`, …) run exactly as if you'd typed it, so `python plainlang.py demo.plang` still works too.
 
-**The tests:**
+The tests:
 ```bash
 python run_tests.py            # every suite CI runs
 python run_tests.py --quick    # skip the slow randomized ones
@@ -238,41 +238,41 @@ python run_tests.py --quick    # skip the slow randomized ones
 
 ## How it works
 
-A classic front end feeding **three** independent back ends:
+A classic front end feeding three independent back ends:
 
-1. **Tokenizer** — turns source text into a stream of words, numbers, strings, and symbols, tracking line numbers for error reporting.
-2. **Parser** — a recursive-descent parser with correct operator precedence builds a syntax tree. Keywords like `plus`, `is greater than`, and `multiplied by` stand in for symbols.
-3. **Back ends** — the same syntax tree is consumed by:
-   - a **tree-walking interpreter** (the simple reference);
-   - a **bytecode compiler + stack VM** (`plainvm.py`) — lowers the tree to flat bytecode executed on an operand stack;
-   - a **JavaScript transpiler** (`plainlang.js`) — emits readable JS;
-   - and, in the browser, an **execution tracer** that powers the time-travel debugger.
+1. Tokenizer: turns source text into a stream of words, numbers, strings, and symbols, tracking line numbers for error reporting.
+2. Parser: a recursive-descent parser with correct operator precedence builds a syntax tree. Keywords like `plus`, `is greater than`, and `multiplied by` stand in for symbols.
+3. Back ends: the same syntax tree is consumed by:
+   - a tree-walking interpreter (the simple reference);
+   - a bytecode compiler + stack VM (`plainvm.py`), lowers the tree to flat bytecode executed on an operand stack;
+   - a JavaScript transpiler (`plainlang.js`), emits readable JS;
+   - and, in the browser, an execution tracer that powers the time-travel debugger.
 
 ### Three back ends, one truth
 
 The tree-walker and the bytecode VM are completely separate implementations. They are
 held to the same behaviour by `test_vm.py`, which runs a battery of programs through both
-and asserts the output is identical — *including* the wording of every error message.
+and asserts the output is identical, *including* the wording of every error message.
 Two implementations that agree on everything is strong evidence both are correct.
 
-On top of the hand-written cases, `fuzz.py` does **differential fuzzing** — a type-aware
+On top of the hand-written cases, `fuzz.py` does differential fuzzing, a type-aware
 generator emits random programs across the *whole* language (numbers, text, lists,
 booleans, `if`/`count`/`match`, function calls, `map`/`filter`/`reduce`), and every one is
 checked for identical output on both engines. This has found real bugs twice:
 
-1. Nested `count` loops reusing the same variable name diverged — the VM used the loop
+1. Nested `count` loops reusing the same variable name diverged, the VM used the loop
    variable itself as the iteration counter, so an inner loop corrupted the outer one. Fixed
    by driving iteration with a hidden counter.
 2. An error occurring in the same expression as, but *after*, a function call was blamed on
-   a line inside the function body instead of the real call site — the interpreters weren't
+   a line inside the function body instead of the real call site, the interpreters weren't
    restoring the "current line" when a call returned. Fixed in all three engines. The same
    sweep also caught `round`/`absolute`/`sqrt`/`random`/`remainder` calling straight into
    `int()`/`round()` without checking their argument was a number first, so bad input raised
-   a raw crash instead of a friendly error — now they all validate first.
+   a raw crash instead of a friendly error, now they all validate first.
 3. Adding `power`/`min`/`max` surfaced a real semantics bug in `is equal to`/`is not equal
    to`: the tree-walker built a dict of all six comparison results at once to pick the right
    one, so an *ordering* comparison between incompatible types (`5 > "five"`) threw before
-   the requested `==` was ever read — meaning equality checks between mismatched types
+   the requested `==` was ever read, meaning equality checks between mismatched types
    raised instead of just being `false`, and the JS engine additionally compared lists and
    records by reference instead of by value. Fixed everywhere: equality is now always
    well-defined across types (like Python's own `==`), only ordering requires matching
@@ -280,7 +280,7 @@ checked for identical output on both engines. This has found real bugs twice:
 
 4. A *fourth* engine turned up four more. `plainwasm.py` (below) compiles to real WebAssembly,
    so fuzzing it against the interpreter meant comparing more independent implementations
-   than ever — and they immediately disagreed: an `if` on the line after `otherwise` was
+   than ever, and they immediately disagreed: an `if` on the line after `otherwise` was
    silently parsed as `otherwise if` (newlines were invisible to the parser, so a nested `if`
    swallowed an `end`); `round` gave `2` for `2.5` in Python but `3` in JavaScript; Python printed
    `6.64712e-05` where JavaScript printed `0.0000664712`; and `power of 0 and -1` crashed the
@@ -291,15 +291,15 @@ checked for identical output on both engines. This has found real bugs twice:
    never `return`s, used as a value, printed `nothing` on the VM but raised the right error
    everywhere else). And the fuzzer itself was audited: a bug in *my generator* meant 99% of its
    programs were syntactically invalid, so the engines "agreed" on the syntax error and the run
-   proved little — `fuzz.py` now fails loudly unless at least 95% of its programs are valid. Once the
+   proved little, `fuzz.py` now fails loudly unless at least 95% of its programs are valid. Once the
    programs were real, deeper bugs surfaced: an unbounded-integer crash at 4,300 digits (numbers are
    now 64-bit floats in every engine, with a friendly "too big" error), and text that could grow
    until the machine ran out of memory (text now has a ceiling too, and replacing empty text is an
-   error — Python and JavaScript disagreed about what it even meant).
+   error, Python and JavaScript disagreed about what it even meant).
 
 Every one of these is fixed once, in every engine, with a regression test. After the fixes, 30,000
 valid random programs agree between the interpreter and the VM, and 10,000 between the interpreter
-and real WebAssembly — with no magnitude exemptions.
+and real WebAssembly, with no magnitude exemptions.
 
 ### Seeing the bytecode
 
@@ -313,21 +313,21 @@ $ python plainvm.py --emit program.plang      # compile to a portable bytecode f
 $ python plainvm.py --run-bc program.plbc     # run compiled bytecode (no source, no parser)
 ```
 
-Like `.pyc`/`.class`, PlainLang can compile a program **ahead of time** to a portable
-bytecode file and run it later without the source or the parser — the round-trip is
+Like `.pyc`/`.class`, PlainLang can compile a program ahead of time to a portable
+bytecode file and run it later without the source or the parser, the round-trip is
 verified to produce identical output to a direct run.
 
-`--trace` prints every bytecode step with its **source line** and the **operand stack**, so
-you can watch the stack machine run — and see the optimizer's work, since `set x to 2 plus 3`
+`--trace` prints every bytecode step with its source line and the operand stack, so
+you can watch the stack machine run, and see the optimizer's work, since `set x to 2 plus 3`
 already traces as `CONST 5`. The disassembler carries the same source-line column.
 
-The compiler runs an **optimizer** before emitting bytecode — three passes:
+The compiler runs an optimizer before emitting bytecode, three passes:
 *constant folding* (any expression whose operands are all literals is pre-computed, so
 `say (2 plus 3) multiplied by 4` compiles straight to `CONST 20; PRINT`), *dead-code
 elimination* (branches that can never run, and statements after a `return`/`stop`/`skip`,
 are dropped), and a *peephole* pass (redundant jumps are threaded and removed). It only
-optimizes transformations it can prove are valid — `5 divided by 0` and `"a" minus 1` are
-left for the runtime to report — and the cross-validation suite proves the optimizer never
+optimizes transformations it can prove are valid, `5 divided by 0` and `"a" minus 1` are
+left for the runtime to report, and the cross-validation suite proves the optimizer never
 changes a program's output.
 
 A `count` loop, for example, lowers to primitive jumps and a single direction-agnostic
@@ -350,12 +350,12 @@ loop test `(i - stop) * step <= 0`:
 ```
 
 The VM's dispatch loop inlines the hottest opcodes (variable access, arithmetic, calls)
-and runs roughly **1.9× faster** than the tree-walker on recursive workloads.
+and runs roughly 1.9× faster than the tree-walker on recursive workloads.
 
 ### Catching bugs before you run
 
-`plaincheck.py` is a separate **semantic-analysis phase**. It walks the tree, tracks a
-chain of scopes, and reports problems *before* execution — and, unlike the runtime, it
+`plaincheck.py` is a separate semantic-analysis phase. It walks the tree, tracks a
+chain of scopes, and reports problems *before* execution, and, unlike the runtime, it
 reports them *all at once*, each with a caret:
 
 ```
@@ -373,22 +373,22 @@ $ python plaincheck.py program.plang
   6 problem(s):  3 error(s), 3 warning(s).
 ```
 
-It is tuned for **precision** — correct programs are never flagged — because a teaching
+It is tuned for precision, correct programs are never flagged, because a teaching
 tool that cries wolf is worse than none.
 
-When a program has several *syntax* errors, the checker uses **panic-mode error recovery**
+When a program has several *syntax* errors, the checker uses panic-mode error recovery
 to keep going past each one and report them all at once, instead of stopping at the first.
 
-The same pass does **gradual type checking**: it infers a type for each variable (from
+The same pass does gradual type checking: it infers a type for each variable (from
 literals and consistent assignments) and reports operations that must fail, while leaving
 anything it can't determine as *unknown* and never complaining about it. So
-`set age to "twelve"` followed by `if age is at least 18` is caught before running —
-*"I can't compare some text with a number"* — but a function parameter whose type isn't
+`set age to "twelve"` followed by `if age is at least 18` is caught before running,
+*"I can't compare some text with a number"*, but a function parameter whose type isn't
 known is never second-guessed.
 
 ### Keeping code consistent
 
-`plainfmt.py` re-indents a program from its block structure and normalizes whitespace —
+`plainfmt.py` re-indents a program from its block structure and normalizes whitespace,
 one canonical layout, so every file in a project looks the same no matter who wrote it:
 
 ```
@@ -405,7 +405,7 @@ formatter's output byte-for-byte.
 
 ### Compiling to WebAssembly
 
-`plainwasm.py` compiles PlainLang to a real **`.wasm` binary** — not text, not a wrapper: it
+`plainwasm.py` compiles PlainLang to a real `.wasm` binary, not text, not a wrapper: it
 writes the module bytes itself (LEB128 integers, type/import/function/memory/global/export/code/
 data sections, opcodes, and structured control flow with `br`-depth bookkeeping), so there's no
 assembler, LLVM, or toolchain in the loop. The output runs in any WebAssembly host.
@@ -415,40 +415,40 @@ $ python plainwasm.py program.plang              # compile, then run under Node
 $ python plainwasm.py program.plang -o out.wasm  # just emit the binary
 ```
 
-It covers a "systems core" of the language — numbers (f64) and true/false, all arithmetic and
+It covers a "systems core" of the language, numbers (f64) and true/false, all arithmetic and
 comparisons, `if`/`match`/`repeat`/`while`/`count`/`stop`/`skip`, functions with recursion, the
-math built-ins, and `say` with text — and refuses anything else (lists, records, text
+math built-ins, and `say` with text, and refuses anything else (lists, records, text
 variables) with a plain explanation instead of miscompiling. `count` uses the same hidden-counter
 design the VM adopted after the nested-loop bug; `round`, `remainder`, and `power` are emitted to
 match the interpreter's exact semantics (WASM's own `f64.nearest` rounds ties to even, so `round`
 is built from `floor`); divide-by-zero and friends call a host `fail` instead of producing `inf`.
 
 It's held to the same standard as every other engine: `fuzz_wasm.py` generates random programs
-and checks the interpreter and **real WebAssembly** agree on every one — output *and* the point
+and checks the interpreter and real WebAssembly agree on every one, output *and* the point
 where a runtime error stops the program. Known, documented limit: the WASM backend uses doubles,
 and numbers are 64-bit floats in *every* engine, so the same program prints the same digits everywhere.
 
 ### Compiling to native x86-64 for AetherOS
 
-`plainaxe.py` compiles PlainLang to **machine code for [AetherOS](https://github.com/JohnTeye0000/aetheros)**,
+`plainaxe.py` compiles PlainLang to machine code for [AetherOS](https://github.com/JohnTeye0000/aetheros),
 a separate from-scratch x86-64 kernel: every instruction is hand-encoded (no assembler), numbers live in
 SSE2 registers as IEEE doubles, and the program runs in ring 3 under the kernel's scheduler, talking to it
 through system calls (`write`, `sleep`, `exit`, and a `printnum` call that formats numbers exactly like
 `format_number`). It shares the WebAssembly backend's front end, so both accept and refuse exactly the same
-programs. It's the first command-line engine to execute **`wait N`** — and on AetherOS that's a genuine
+programs. It's the first command-line engine to execute `wait N`, and on AetherOS that's a genuine
 blocking sleep: the process uses no CPU until it wakes.
 
 ```
 $ python plainaxe.py program.plang -o program.axe --explain   # compile + show the scheduling hint
 ```
 
-`plainhint.py` reads the same program and guesses how it will behave — `cpu`, `io`, `interactive` — from
+`plainhint.py` reads the same program and guesses how it will behave, `cpu`, `io`, `interactive`, from
 its loop structure and its waits, and writes that guess (with its reasoning) into the `.axe` file, where the
 kernel's hint-aware schedulers can use it. Whether that helps, and when it misleads, is the subject of a
 small scheduling study in the AetherOS repo (`experiments/RESEARCH.md`).
 
 Held to the same standard as the other engines: `test_axe.py` boots the real kernel in QEMU, runs 30
-hand-written programs plus **200 random programs** from the WASM fuzzer's generator, and checks every
+hand-written programs plus 200 random programs from the WASM fuzzer's generator, and checks every
 output against the interpreter (including where runtime errors stop). The fuzzer caught a real bug on the
 way: `say "total " plus (remainder of x and 0)` printed `total ` before failing; the interpreter builds the
 whole line first. Documented limits: `power` with a fractional exponent and `remainder` of numbers beyond
@@ -456,28 +456,28 @@ whole line first. Documented limits: `power` with a fractional exponent and `rem
 
 ### Editor tooling
 
-`plainlsp.py` is a real **Language Server** — the same protocol pyright, gopls, and
+`plainlsp.py` is a real Language Server, the same protocol pyright, gopls, and
 rust-analyzer speak. Point any LSP-capable editor at `python plainlsp.py` and it gets
 live diagnostics as you type (undefined variables, wrong argument counts, type errors,
-unreachable code, syntax errors — the exact same checks as `plaincheck.py`, with the same
+unreachable code, syntax errors, the exact same checks as `plaincheck.py`, with the same
 "did you mean?" suggestions) and hover documentation for keywords. The transport (stdio,
-`Content-Length`-framed JSON-RPC) is a thin shell around a pure `LSPServer.handle()` — one
-dict in, a list of response/notification dicts out — so the whole protocol is tested
+`Content-Length`-framed JSON-RPC) is a thin shell around a pure `LSPServer.handle()`, one
+dict in, a list of response/notification dicts out, so the whole protocol is tested
 without spawning an editor or even a subprocess, plus one real subprocess test proving the
 actual stdio framing works.
 
-`vscode-extension/` is a real VS Code extension wired to it — `syntaxes/plainlang.tmLanguage.json`
+`vscode-extension/` is a real VS Code extension wired to it, `syntaxes/plainlang.tmLanguage.json`
 gives `.plang` files syntax highlighting (keywords, strings with `{interpolation}`, numbers,
 comments), and `src/extension.js` is a thin client that starts `python plainlsp.py` and speaks
 LSP to it over stdio via `vscode-languageclient`. The client has no PlainLang-specific logic of
-its own — every diagnostic comes from the same `plaincheck.py` the CLI uses. See its own
+its own, every diagnostic comes from the same `plaincheck.py` the CLI uses. See its own
 [README](vscode-extension/README.md) for installing it from source.
 
 ---
 
 ## Design notes & trade-offs
 
-- **Lists are 1-indexed** (`item 1 of list`) — beginners count from one, so the language does too.
-- **`plus` concatenates** when either side is text, so `"score: " plus 42` just works.
-- **Function arguments are separated by `and`**, which is also the boolean operator — so a boolean *inside* an argument needs parentheses: `f with (a and b)`. (This ambiguity was caught by the test suite.)
-- **The compiler favours readability where it can, but not at the cost of correctness.** The generated JavaScript is fuzz-tested against the JS engine itself (`fuzz_transpiler.py`) and must match it exactly — including number formatting, rounding, and remainder — so a few runtime helpers (`plus`, `remainderOf`, `format`) exist purely to keep native JS operators from silently doing the wrong thing, without giving up otherwise-idiomatic output.
+- Lists are 1-indexed (`item 1 of list`), beginners count from one, so the language does too.
+- `plus` concatenates when either side is text, so `"score: " plus 42` just works.
+- Function arguments are separated by `and`, which is also the boolean operator, so a boolean *inside* an argument needs parentheses: `f with (a and b)`. (This ambiguity was caught by the test suite.)
+- The compiler favours readability where it can, but not at the cost of correctness. The generated JavaScript is fuzz-tested against the JS engine itself (`fuzz_transpiler.py`) and must match it exactly, including number formatting, rounding, and remainder, so a few runtime helpers (`plus`, `remainderOf`, `format`) exist purely to keep native JS operators from silently doing the wrong thing, without giving up otherwise-idiomatic output.
